@@ -306,9 +306,9 @@ func NewLuaPool() *LuaPool {
 }
 
 //Init 初始化lua容器,必须调用.
-func (pl *LuaPool) Init() (err error) {
+func (pl *LuaPool) Init(file string) (err error) {
 	//读取配置文件
-	if err = pl.conf.Load("lua.conf"); err != nil {
+	if err = pl.conf.Load(file); err != nil {
 		return
 	}
 	if err = pl.initDB(); err != nil {
