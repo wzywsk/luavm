@@ -160,6 +160,11 @@ func (l *LuaVM) AddField(dst lua.LValue, key string, field interface{}) {
 	l.l.SetField(dst, key, luar.New(l.l, field))
 }
 
+//NewFunction ...
+func (l *LuaVM) NewFunction(fn lua.LGFunction) *lua.LFunction {
+	return l.l.NewFunction(fn)
+}
+
 //GetGlobal 获取全局类型
 func (l *LuaVM) GetGlobal(name string) (value lua.LValue) {
 	l.lock.Lock()

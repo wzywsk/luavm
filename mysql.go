@@ -80,7 +80,8 @@ func newMysqlState(db *sql.DB) *mysqlState {
 	return m
 }
 
-func getArgs(L *lua.LState) (cmd string, args []interface{}, err error) {
+//GetArgs 获取诸如(cmd string, a ...interface{})形式的参数
+func GetArgs(L *lua.LState) (cmd string, args []interface{}, err error) {
 	num := L.GetTop()
 	if num < 1 {
 		err = fmt.Errorf("参数个数错误[%d]", num)
@@ -107,7 +108,7 @@ func getArgs(L *lua.LState) (cmd string, args []interface{}, err error) {
 }
 
 func (my *mysqlState) query(L *lua.LState) int {
-	cmd, args, err := getArgs(L)
+	cmd, args, err := GetArgs(L)
 	if err != nil {
 		pushTwoErr(err, L)
 		return 2
@@ -165,7 +166,7 @@ func (my *mysqlState) query(L *lua.LState) int {
 }
 
 func (my *mysqlState) queryrow(L *lua.LState) int {
-	cmd, args, err := getArgs(L)
+	cmd, args, err := GetArgs(L)
 	if err != nil {
 		pushTwoErr(err, L)
 		return 2
@@ -224,7 +225,7 @@ func (my *mysqlState) exec(L *lua.LState) int {
 		pushTwoErr(fmt.Errorf("请先开始事务"), L)
 		return 2
 	}
-	cmd, args, err := getArgs(L)
+	cmd, args, err := GetArgs(L)
 	if err != nil {
 		pushTwoErr(err, L)
 		return 2
