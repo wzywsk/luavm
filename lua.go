@@ -62,7 +62,7 @@ func (l *LuaVM) PreLoadModule(name string, loader lua.LGFunction) {
 }
 
 //DoString 执行一个lua字符串
-func (l *LuaVM) DoString(str string) (err error) {
+func (l *LuaVM) DoString(str string) (err error, errNo, errMsg string) {
 	//初始化easy全局变量
 	l.initEasy()
 
@@ -80,19 +80,21 @@ func (l *LuaVM) DoString(str string) (err error) {
 
 	//获取lua返回值
 	num := l.l.GetTop()
-	var arg1, arg2 string
 	switch num {
 	//没有返回值默认为成功
 	case 0:
+		errNo, errMsg = "", ""
 	case 1:
-		arg1 = l.l.CheckString(1)
+		errNo = l.l.CheckString(1)
+		errMsg = ""
 	case 2:
-		arg1 = l.l.CheckString(1)
-		arg2 = l.l.CheckString(2)
+		errNo = l.l.CheckString(1)
+		errMsg = l.l.CheckString(2)
 	default:
+		errNo = l.l.CheckString(1)
+		errMsg = l.l.CheckString(2)
 	}
-	_, _ = arg1, arg2
-	return nil
+	return
 }
 
 //DoFile 根据busitype和trancode加载一个lua文件并运行,
@@ -272,6 +274,11 @@ func (l *LuaVM) initEasy() {
 //SetEasyAttr 往easy全局对象中添加属性
 func (l *LuaVM) SetEasyAttr(name string, value lua.LValue) {
 	l.easy.RawSetString(name, value)
+}
+
+//GetEasyAttr 往easy全局对象中读取属性
+func (l *LuaVM) GetEasyAttr(name string) lua.LValue {
+	return l.easy.RawGetString(name)
 }
 
 //LuaPool lua虚拟机池
