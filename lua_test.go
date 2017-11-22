@@ -202,7 +202,7 @@ func BenchmarkLua(b *testing.B) {
 	b.ReportAllocs()
 	b.RunParallel(func(pb *testing.PB) {
 		vmPool := NewLuaPool()
-		if err := vmPool.Init(); err != nil {
+		if err := vmPool.Init("lua.conf"); err != nil {
 			b.Fatal(err)
 		}
 		for pb.Next() {
