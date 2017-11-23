@@ -114,7 +114,6 @@ func tableTest(t *testing.T) {
 	if err := vm.DoString(script); err != nil {
 		t.Fatal(err)
 	}
-
 	test := vm.GetGlobal("test")
 	//这里测试执行lua后,先前的变量会不会保留
 	if name := vm.GetField(test, "name"); name.String() != "zhangsan" {
@@ -202,7 +201,7 @@ func BenchmarkLua(b *testing.B) {
 	b.ReportAllocs()
 	b.RunParallel(func(pb *testing.PB) {
 		vmPool := NewLuaPool()
-		if err := vmPool.Init(); err != nil {
+		if err := vmPool.Init("easy.conf"); err != nil {
 			b.Fatal(err)
 		}
 		for pb.Next() {
