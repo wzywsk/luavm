@@ -318,9 +318,21 @@ func NewLuaPool() *LuaPool {
 }
 
 //Init 初始化lua容器,必须调用.
-func (pl *LuaPool) Init(file string) (err error) {
+func (pl *LuaPool) InitFromFile(file string) (err error) {
 	//读取配置文件
-	if err = pl.conf.Load(file); err != nil {
+	if err = pl.conf.LoadFromFile(file); err != nil {
+		return
+	}
+	if err = pl.initDB(); err != nil {
+		return
+	}
+	return nil
+}
+
+//Init 初始化lua容器,必须调用.
+func (pl *LuaPool) InitFromConf(conf string) (err error) {
+	//读取配置文件
+	if err = pl.conf.LoadFromConf(conf); err != nil {
 		return
 	}
 	if err = pl.initDB(); err != nil {
