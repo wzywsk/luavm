@@ -13,10 +13,11 @@ import (
 
 //LuaVM lua虚拟机,每一个lua脚本维护一个lua状态
 type LuaVM struct {
-	lock sync.Mutex
-	l    *lua.LState
-	conf *luaConfig
-	easy *lua.LTable //easy 全局对象
+	lock  sync.Mutex
+	l     *lua.LState
+	conf  *luaConfig
+	easy  *lua.LTable   //easy 全局对象
+	trans []*mysqlState //mysql事务状态
 }
 
 //NewLuaVM ...
@@ -77,6 +78,13 @@ func (l *LuaVM) DoString(str string) (errNo, errMsg string, err error) {
 	if err = l.l.DoString(str); err != nil {
 		return
 	}
+	//如果存在事务状态则全部回滚
+	for _, tran := range l.trans {
+		if tran.tx != nil {
+			tran.tx.Rollback()
+		}
+	}
+	l.trans = nil
 
 	//获取lua返回值
 	num := l.l.GetTop()
@@ -131,6 +139,11 @@ func (l *LuaVM) DoFile(busi, trancode string) (err error) {
 	}
 	_, _ = arg1, arg2
 	return nil
+}
+
+//添加mysql事务状态
+func (l *LuaVM) addTran(tran *mysqlState) {
+	l.trans = append(l.trans, tran)
 }
 
 //SetGlobal 为lua设置一个全局类型
@@ -315,7 +328,7 @@ func NewLuaPool() *LuaPool {
 	return p
 }
 
-//Init 初始化lua容器,必须调用.
+//InitFromFile 初始化lua容器,必须调用.
 func (pl *LuaPool) InitFromFile(file string) (err error) {
 	//读取配置文件
 	if err = pl.conf.LoadFromFile(file); err != nil {
@@ -327,7 +340,7 @@ func (pl *LuaPool) InitFromFile(file string) (err error) {
 	return nil
 }
 
-//Init 初始化lua容器,必须调用.
+//InitFromConf 初始化lua容器,必须调用.
 func (pl *LuaPool) InitFromConf(conf string) (err error) {
 	//读取配置文件
 	if err = pl.conf.LoadFromConf(conf); err != nil {
@@ -383,11 +396,16 @@ func (pl *LuaPool) Get() *LuaVM {
 	return x
 }
 
+type tranfunc string
+
 //这里将加载lua库和初始化easy全局变量
 func (pl *LuaPool) new() *LuaVM {
 	L := NewLuaVM(pl.conf)
 	L.LoadLibs(pl.mysql.Loader, pl.redis.Loader, pl.mgo.Loader)
 	L.easy = L.NewLuaTable()
+	//初始化context
+	ctx := context.WithValue(context.Background(), tranfunc("addTran"), L.addTran)
+	L.l.SetContext(ctx)
 	return L
 }
 

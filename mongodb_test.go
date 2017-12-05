@@ -58,7 +58,7 @@ func TestMongodb(t *testing.T) {
 				error(err)
 			end
 	`
-	if err := vm.DoString(script); err != nil {
+	if _, _, err := vm.DoString(script); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -86,7 +86,7 @@ func BenchmarkMongodb(b *testing.B) {
 		for pb.Next() {
 			vm := pool.Get()
 			vm.PreLoadModule("mongodb", mgo.Loader)
-			if err := vm.DoString(script); err != nil {
+			if _, _, err := vm.DoString(script); err != nil {
 				b.Fatal(err)
 			}
 			pool.Put(vm)
