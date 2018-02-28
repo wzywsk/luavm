@@ -63,6 +63,14 @@ func (l *luaMysql) connect(L *lua.LState) int {
 	my.RawSetString("begin", L.NewFunction(m.begin))
 	my.RawSetString("commit", L.NewFunction(m.commit))
 	my.RawSetString("rollback", L.NewFunction(m.rollback))
+	//添加mysql事务状态
+	if ctx := L.Context(); ctx != nil {
+		f := ctx.Value(tranfunc("addTran")).(func(*mysqlState))
+		f(m)
+	} else {
+		pushTwoErr(fmt.Errorf("ctx为空"), L)
+		return 2
+	}
 	L.Push(my)
 	return 1
 }

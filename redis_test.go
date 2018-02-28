@@ -54,7 +54,7 @@ func TestLuaRedis(t *testing.T) {
 		end
 	`
 
-	if err := vm.DoString(script); err != nil {
+	if _, _, err := vm.DoString(script); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -88,7 +88,7 @@ func BenchmarkRedis(b *testing.B) {
 		for pb.Next() {
 			vm := pool.Get()
 			vm.PreLoadModule("redis", redis.Loader)
-			if err := vm.DoString(script); err != nil {
+			if _, _, err := vm.DoString(script); err != nil {
 				b.Fatal(err)
 			}
 			pool.Put(vm)

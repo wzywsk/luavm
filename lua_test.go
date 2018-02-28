@@ -59,7 +59,7 @@ func luaGetGolang(t *testing.T) {
 				error("easy属性不相符")
 			end
 			`
-	if err := vm.DoString(str); err != nil {
+	if _, _, err := vm.DoString(str); err != nil {
 		t.Error(err)
 	}
 }
@@ -76,7 +76,7 @@ func golangGetLua(t *testing.T) {
 				return name
 			end
 		`
-	if err := vm.DoString(script); err != nil {
+	if _, _, err := vm.DoString(script); err != nil {
 		t.Error(err)
 	}
 	if name := vm.GetGlobal("name").String(); name != "easy" {
@@ -111,7 +111,7 @@ func tableTest(t *testing.T) {
 	script := `
 			test.age = 25		
 		`
-	if err := vm.DoString(script); err != nil {
+	if _, _, err := vm.DoString(script); err != nil {
 		t.Fatal(err)
 	}
 	test := vm.GetGlobal("test")
@@ -165,7 +165,7 @@ func typeConvert(t *testing.T) {
 				error("user结构体转换错误")
 			end
 		`
-	if err := vm.DoString(script); err != nil {
+	if _, _, err := vm.DoString(script); err != nil {
 		t.Fatal(err)
 	}
 	//测试lua类型转换为goalng类型
@@ -176,7 +176,7 @@ func typeConvert(t *testing.T) {
 			string = "hello"
 			num = 26
 		`
-	if err := vm.DoString(script); err != nil {
+	if _, _, err := vm.DoString(script); err != nil {
 		t.Fatal(err)
 	}
 	table := vm.GetGlobal("table")
@@ -201,12 +201,12 @@ func BenchmarkLua(b *testing.B) {
 	b.ReportAllocs()
 	b.RunParallel(func(pb *testing.PB) {
 		vmPool := NewLuaPool()
-		if err := vmPool.Init("lua.conf"); err != nil {
+		if err := vmPool.InitFromConf("lua.conf"); err != nil {
 			b.Fatal(err)
 		}
 		for pb.Next() {
 			vm := vmPool.Get()
-			if err := vm.DoString(`local m`); err != nil {
+			if _, _, err := vm.DoString(`local m`); err != nil {
 				b.Fatal(err)
 			}
 			vmPool.Put(vm)

@@ -63,7 +63,7 @@ func TestMysql(t *testing.T) {
 			error("mysql update affected 不相符")
 		end
 		`
-	if err := vm.DoString(script); err != nil {
+	if _, _, err := vm.DoString(script); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -104,7 +104,7 @@ func BenchmarkMysql(b *testing.B) {
 		for pb.Next() {
 			vm := pool.Get()
 			vm.PreLoadModule("mysql", my.Loader)
-			if err := vm.DoString(script); err != nil {
+			if _, _, err := vm.DoString(script); err != nil {
 				b.Fatal(err)
 			}
 			pool.Put(vm)
