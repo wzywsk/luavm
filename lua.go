@@ -67,6 +67,16 @@ func (l *LuaVM) DoString(str string) (errNo, errMsg string, err error) {
 	//初始化easy全局变量
 	l.initEasy()
 
+	defer func() {
+		//如果存在事务状态则全部回滚
+		for _, tran := range l.trans {
+			if tran.tx != nil {
+				tran.tx.Rollback()
+			}
+		}
+		l.trans = nil
+	}()
+
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
@@ -78,13 +88,6 @@ func (l *LuaVM) DoString(str string) (errNo, errMsg string, err error) {
 	if err = l.l.DoString(str); err != nil {
 		return
 	}
-	//如果存在事务状态则全部回滚
-	for _, tran := range l.trans {
-		if tran.tx != nil {
-			tran.tx.Rollback()
-		}
-	}
-	l.trans = nil
 
 	//获取lua返回值
 	num := l.l.GetTop()
@@ -93,11 +96,11 @@ func (l *LuaVM) DoString(str string) (errNo, errMsg string, err error) {
 	case 0:
 		errNo, errMsg = "", ""
 	case 1:
-		errNo = l.l.CheckString(1)
+		errNo = l.l.ToString(1)
 		errMsg = ""
 	case 2:
-		errNo = l.l.CheckString(1)
-		errMsg = l.l.CheckString(2)
+		errNo = l.l.ToString(1)
+		errMsg = l.l.ToString(2)
 	default:
 	}
 	return
