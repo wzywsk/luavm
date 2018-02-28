@@ -3,6 +3,7 @@ package luavm
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync"
 
 	"github.com/yuin/gluamapper"
@@ -47,6 +48,10 @@ func (l *LuaVM) SetContext(ctx context.Context) {
 func (l *LuaVM) LoadLibs(ml, rl, gl lua.LGFunction) {
 	//加载基本库
 	l.OpenLibs()
+	//加载bigint库
+	if err := l.l.DoFile("bigint.lua"); err != nil {
+		log.Printf("加载bigint失败 %v", err)
+	}
 	//加载json插件
 	l.PreLoadModule("json", json.Loader)
 	//加载mysql插件
