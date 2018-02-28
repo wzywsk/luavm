@@ -85,11 +85,11 @@ func (l *LuaVM) DoString(str string) (errNo, errMsg string, err error) {
 	case 0:
 		errNo, errMsg = "", ""
 	case 1:
-		errNo = l.l.CheckString(1)
+		errNo = l.l.ToString(1)
 		errMsg = ""
 	case 2:
-		errNo = l.l.CheckString(1)
-		errMsg = l.l.CheckString(2)
+		errNo = l.l.ToString(1)
+		errMsg = l.l.ToString(2)
 	default:
 	}
 	return
