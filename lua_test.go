@@ -14,6 +14,8 @@ func TestLuaVM(t *testing.T) {
 	vmPool = NewLuaPool()
 
 	for i := 0; i < 1; i++ {
+		t.Run("lua处理int64", luaInt64)
+
 		t.Run("golang注入lua全局变量", luaGetGolang)
 
 		t.Run("golang获取lua全局变量", golangGetLua)
@@ -24,6 +26,33 @@ func TestLuaVM(t *testing.T) {
 	}
 }
 
+func luaInt64(t *testing.T) {
+	t.Parallel()
+	vm := vmPool.Get()
+	defer vmPool.Put(vm)
+
+	vm.SetGlobal("m", lua.LString("90071992547409919"))
+
+	str := `
+			--测试lua中int64
+			i = bigint(m)
+			n = bigint("1")
+			i = i + n
+			return tostring(i)
+	`
+	if _, _, err := vm.DoString(str); err != nil {
+		t.Error(err)
+	}
+	r := vm.l.CheckString(1)
+
+	i, err := strconv.ParseInt(r, 10, 64)
+	if err != nil {
+		t.Error(err)
+	}
+	if i != 90071992547409920 {
+		t.Error("int64加法测试失败")
+	}
+}
 func luaGetGolang(t *testing.T) {
 	t.Parallel()
 	vm := vmPool.Get()

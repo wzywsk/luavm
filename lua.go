@@ -3,6 +3,7 @@ package luavm
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync"
 
 	"github.com/yuin/gluamapper"
@@ -48,6 +49,10 @@ func (l *LuaVM) SetContext(ctx context.Context) {
 func (l *LuaVM) LoadLibs(ml, rl, gl lua.LGFunction) {
 	//加载基本库
 	l.OpenLibs()
+	//加载bigint库
+	if err := l.l.DoString(bigintLib); err != nil {
+		log.Printf("加载bigint库失败 %v", err)
+	}
 	//加载json插件
 	l.PreLoadModule("json", json.Loader)
 	//加载mysql插件
@@ -68,6 +73,16 @@ func (l *LuaVM) DoString(str string) (errNo, errMsg string, err error) {
 	//初始化easy全局变量
 	l.initEasy()
 
+	defer func() {
+		//如果存在事务状态则全部回滚
+		for _, tran := range l.trans {
+			if tran.tx != nil {
+				tran.tx.Rollback()
+			}
+		}
+		l.trans = nil
+	}()
+
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
@@ -79,13 +94,6 @@ func (l *LuaVM) DoString(str string) (errNo, errMsg string, err error) {
 	if err = l.l.DoString(str); err != nil {
 		return
 	}
-	//如果存在事务状态则全部回滚
-	for _, tran := range l.trans {
-		if tran.tx != nil {
-			tran.tx.Rollback()
-		}
-	}
-	l.trans = nil
 
 	//获取lua返回值
 	num := l.l.GetTop()
