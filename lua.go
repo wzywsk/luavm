@@ -178,9 +178,11 @@ func (l *LuaVM) SetGlobal(name string, value lua.LValue) {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
-	if name == "easy" && !l.easyInit {
-		l.l.SetGlobal(name, value)
-		l.easyInit = true
+	if name == "easy" {
+		if !l.easyInit {
+			l.l.SetGlobal(name, value)
+			l.easyInit = true
+		}
 	} else {
 		l.l.SetGlobal(name, value)
 	}
