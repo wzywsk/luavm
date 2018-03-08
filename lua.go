@@ -13,11 +13,12 @@ import (
 
 //LuaVM lua虚拟机,每一个lua脚本维护一个lua状态
 type LuaVM struct {
-	lock  sync.Mutex
-	l     *lua.LState
-	conf  *luaConfig
-	easy  *lua.LTable   //easy 全局对象
-	trans []*mysqlState //mysql事务状态
+	lock     sync.Mutex
+	l        *lua.LState
+	conf     *luaConfig
+	easy     *lua.LTable //easy 全局对象
+	easyInit bool
+	trans    []*mysqlState //mysql事务状态
 }
 
 //NewLuaVM ...
@@ -146,6 +147,10 @@ func (l *LuaVM) addTran(tran *mysqlState) {
 	l.trans = append(l.trans, tran)
 }
 
+func (l *LuaVM) GetEnv() *lua.LTable {
+	return l.l.Env
+}
+
 //SetGlobal 为lua设置一个全局类型
 //如果传入函数格式必须为 func(L *lua.LState) int
 //传入参数和返回都使用栈,返回int代表有几个返回参数
@@ -165,7 +170,13 @@ func (l *LuaVM) SetGlobal(name string, value lua.LValue) {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
-	l.l.SetGlobal(name, value)
+	if name == "easy" && !l.easyInit {
+		l.l.SetGlobal(name, value)
+		l.easyInit = true
+	} else {
+		l.l.SetGlobal(name, value)
+	}
+
 	//l.l.SetGlobal(name, luar.New(l.l, value))
 }
 
@@ -273,6 +284,10 @@ func (l *LuaVM) GetField(value lua.LValue, key string) (r lua.LValue) {
 	return l.l.GetField(value, key)
 }
 
+func (l *LuaVM) Reset() {
+	l.l.SetTop(0)
+}
+
 //Clean 清理虚拟机状态
 func (l *LuaVM) Clean() {
 	//清除堆栈和全局变量
@@ -280,6 +295,7 @@ func (l *LuaVM) Clean() {
 	//这里清除全局变量后lua无法定义全局变量,待查
 	//l.l.G.Global = l.l.CreateTable(0, 64)
 	l.easy = l.NewLuaTable()
+	l.easyInit = false
 }
 
 //加入easy全局对象
