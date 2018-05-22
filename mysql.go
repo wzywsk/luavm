@@ -58,7 +58,7 @@ func (l *luaMysql) connect(L *lua.LState) int {
 	m := newMysqlState(db)
 	my := L.NewTable()
 	my.RawSetString("query", L.NewFunction(m.query))
-	my.RawSetString("queryrow", L.NewFunction(m.queryrow))
+	my.RawSetString("queryRow", L.NewFunction(m.queryrow))
 	my.RawSetString("exec", L.NewFunction(m.exec))
 	my.RawSetString("begin", L.NewFunction(m.begin))
 	my.RawSetString("commit", L.NewFunction(m.commit))
