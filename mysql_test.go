@@ -13,7 +13,7 @@ func TestMysql(t *testing.T) {
 
 	conf := []string{
 		"main",
-		"root:easy@tcp(192.168.1.30:3306)/test?charset=utf8",
+		"root:easy@tcp(192.168.1.22:3306)/test?charset=utf8",
 	}
 	my := newLuaMysql()
 	if err := my.Init(conf); err != nil {
@@ -40,10 +40,9 @@ func TestMysql(t *testing.T) {
 		if(rows == nil) then
 			error(err)
 		end
-		if(rows[0].name ~= "lisi") or (rows[0].age ~= 25) then
+		if(rows[1].name ~= "lisi") or (rows[1].age ~= 25) then
 			error("mysql insert query 不符")
 		end
-
 		row, err = conn.queryrow("select * from user where name = ?", "lisi")
 		if (row == nil) then
 			error(err)

@@ -142,7 +142,8 @@ func (my *mysqlState) query(L *lua.LState) int {
 	//这里存放读取的所有数据
 	all := L.NewTable()
 	//读出所有数据并转换为lua数据类型
-	index := 0
+	//lua 数组下标从1开始
+	index := 1
 	for rows.Next() {
 		if err = rows.Scan(m...); err != nil {
 			pushTwoErr(err, L)
