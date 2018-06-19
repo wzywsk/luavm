@@ -3,11 +3,13 @@ package luavm
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"strconv"
 	"sync"
 	"sync/atomic"
 
 	"github.com/yuin/gopher-lua"
+	luar "layeh.com/gopher-luar"
 )
 
 //luaMysql lua容器mysql注入插件,将根据配置初始化多个数据库
@@ -118,23 +120,37 @@ func GetArgs(L *lua.LState) (cmd string, args []interface{}, err error) {
 
 //插入mysql日志表专用,不走事务,直接返回错误
 func (my *mysqlState) logger(L *lua.LState) int {
+	//获取log日志接口
+	easy := L.GetGlobal("easy")
+	logger := L.GetField(easy, "log")
+	logerr := L.GetField(logger, "error")
+	callFunc := func(fn lua.LValue, args ...interface{}) {
+		if fn.Type() != lua.LTFunction {
+			log.Printf("[mysql-logger]%s 类型不是函数\n", fn.String())
+			return
+		}
+
+		largs := make([]lua.LValue, len(args))
+		for i, arg := range args {
+			largs[i] = luar.New(L, arg)
+		}
+		if err := L.CallByParam(lua.P{
+			Fn:      fn,
+			NRet:    0,
+			Protect: true,
+		}, largs...); err != nil {
+			log.Println("[mysql-logger]", err)
+			return
+		}
+	}
+
 	str := L.CheckString(1)
-	result, err := my.db.Exec(str)
+	_, err := my.db.Exec(str)
 	if err != nil {
-		pushTwoErr(err, L)
-		return 2
+		callFunc(logerr, "[mysql-logger]", err.Error())
+		return 0
 	}
-	t := L.NewTable()
-	lastInsertID, err := result.LastInsertId()
-	if err == nil {
-		L.SetField(t, "Insertid", lua.LNumber(float64(lastInsertID)))
-	}
-	affectRow, err := result.RowsAffected()
-	if err == nil {
-		L.SetField(t, "affected", lua.LNumber(float64(affectRow)))
-	}
-	L.Push(t)
-	return 1
+	return 0
 }
 
 func (my *mysqlState) query(L *lua.LState) int {
