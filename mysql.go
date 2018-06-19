@@ -63,6 +63,7 @@ func (l *luaMysql) connect(L *lua.LState) int {
 	my.RawSetString("begin", L.NewFunction(m.begin))
 	my.RawSetString("commit", L.NewFunction(m.commit))
 	my.RawSetString("rollback", L.NewFunction(m.rollback))
+	my.RawSetString("logger", L.NewFunction(m.logger))
 	//添加mysql事务状态
 	if ctx := L.Context(); ctx != nil {
 		f := ctx.Value(tranfunc("addTran")).(func(*mysqlState))
@@ -113,6 +114,27 @@ func GetArgs(L *lua.LState) (cmd string, args []interface{}, err error) {
 		}
 	}
 	return
+}
+
+//插入mysql日志表专用,不走事务,直接返回错误
+func (my *mysqlState) logger(L *lua.LState) int {
+	str := L.CheckString(1)
+	result, err := my.db.Exec(str)
+	if err != nil {
+		pushTwoErr(err, L)
+		return 2
+	}
+	t := L.NewTable()
+	lastInsertID, err := result.LastInsertId()
+	if err == nil {
+		L.SetField(t, "Insertid", lua.LNumber(float64(lastInsertID)))
+	}
+	affectRow, err := result.RowsAffected()
+	if err == nil {
+		L.SetField(t, "affected", lua.LNumber(float64(affectRow)))
+	}
+	L.Push(t)
+	return 1
 }
 
 func (my *mysqlState) query(L *lua.LState) int {

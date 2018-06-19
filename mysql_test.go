@@ -27,6 +27,11 @@ func TestMysql(t *testing.T) {
 		if(conn == nil) then
 			error(err)
 		end
+		--测试日志logger函数
+		ret, err = conn.logger("insert into logger values (9999, 'test error')")
+		if(ret == nil) then
+			error(err)
+		end
 
 		--测试insert
 		conn.begin()
@@ -43,7 +48,7 @@ func TestMysql(t *testing.T) {
 		if(rows[1].name ~= "lisi") or (rows[1].age ~= 25) then
 			error("mysql insert query 不符")
 		end
-		row, err = conn.queryrow("select * from user where name = ?", "lisi")
+		row, err = conn.queryRow("select * from user where name = ?", "lisi")
 		if (row == nil) then
 			error(err)
 		end
