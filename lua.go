@@ -218,6 +218,11 @@ func (l *LuaVM) NewLuaTable() (r *lua.LTable) {
 	return l.l.NewTable()
 }
 
+//NewUserData 创建一个用户数据
+func (l *LuaVM) NewUserData() *lua.LUserData {
+	return l.l.NewUserData()
+}
+
 //ConvLuaType 将一个Go类型转换为Lua类型
 func (l *LuaVM) ConvLuaType(src interface{}) (dst lua.LValue) {
 	dst = luar.New(l.l, src)
