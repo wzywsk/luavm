@@ -3,13 +3,11 @@ package luavm
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"strconv"
 	"sync"
 	"sync/atomic"
 
 	"github.com/yuin/gopher-lua"
-	luar "layeh.com/gopher-luar"
 )
 
 //luaMysql lua容器mysql注入插件,将根据配置初始化多个数据库
@@ -74,6 +72,10 @@ func (l *luaMysql) connect(L *lua.LState) int {
 		pushTwoErr(fmt.Errorf("ctx为空"), L)
 		return 2
 	}
+	//获取Logger接口
+	logger := GetLogger(L)
+	m.SetLogger(logger)
+
 	L.Push(my)
 	return 1
 }
@@ -83,12 +85,18 @@ type mysqlState struct {
 	status int32 //记录事务状态
 	db     *sql.DB
 	tx     *sql.Tx
+	l      Logger
 }
 
 func newMysqlState(db *sql.DB) *mysqlState {
 	m := new(mysqlState)
 	m.db = db
 	return m
+}
+
+//SetLogger ...
+func (my *mysqlState) SetLogger(l Logger) {
+	my.l = l
 }
 
 //GetArgs 获取诸如(cmd string, a ...interface{})形式的参数
@@ -120,34 +128,10 @@ func GetArgs(L *lua.LState) (cmd string, args []interface{}, err error) {
 
 //插入mysql日志表专用,不走事务,直接返回错误
 func (my *mysqlState) logger(L *lua.LState) int {
-	//获取log日志接口
-	easy := L.GetGlobal("easy")
-	logger := L.GetField(easy, "log")
-	logerr := L.GetField(logger, "error")
-	callFunc := func(fn lua.LValue, args ...interface{}) {
-		if fn.Type() != lua.LTFunction {
-			log.Printf("[mysql-logger]%s 类型不是函数\n", fn.String())
-			return
-		}
-
-		largs := make([]lua.LValue, len(args))
-		for i, arg := range args {
-			largs[i] = luar.New(L, arg)
-		}
-		if err := L.CallByParam(lua.P{
-			Fn:      fn,
-			NRet:    0,
-			Protect: true,
-		}, largs...); err != nil {
-			log.Println("[mysql-logger]", err)
-			return
-		}
-	}
-
 	str := L.CheckString(1)
 	_, err := my.db.Exec(str)
 	if err != nil {
-		callFunc(logerr, "[mysql-logger]", err.Error())
+		my.l.Error(err.Error())
 		return 0
 	}
 	return 0
@@ -236,19 +220,21 @@ func (my *mysqlState) queryrow(L *lua.LState) int {
 		m[i] = &values[i]
 	}
 	//这里如果没有查询到数据则返回错误
+	table := L.NewTable()
 	if !rows.Next() {
 		if err := rows.Err(); err != nil {
 			pushTwoErr(err, L)
 			return 2
 		}
-		pushErr(fmt.Errorf("没有查询到数据"), L)
+		//table.RawSetString("_affected", lua.LNumber(0))
+		//L.Push(table)
+		pushTwoErr(fmt.Errorf("sql: no rows in result set"), L)
 		return 2
 	}
 	if err := rows.Scan(m...); err != nil {
 		pushTwoErr(err, L)
 		return 2
 	}
-	table := L.NewTable()
 	for i := range values {
 		switch cols[i].DatabaseTypeName() {
 		case "INT", "BIGINT", "FLOAT", "DOUBLE":
@@ -285,7 +271,7 @@ func (my *mysqlState) exec(L *lua.LState) int {
 	t := L.NewTable()
 	lastInsertID, err := result.LastInsertId()
 	if err == nil {
-		L.SetField(t, "Insertid", lua.LNumber(float64(lastInsertID)))
+		L.SetField(t, "insertid", lua.LNumber(float64(lastInsertID)))
 	}
 	affectRow, err := result.RowsAffected()
 	if err == nil {

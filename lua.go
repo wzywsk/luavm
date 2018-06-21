@@ -155,6 +155,7 @@ func (l *LuaVM) addTran(tran *mysqlState) {
 	l.trans = append(l.trans, tran)
 }
 
+//GetEnv ...
 func (l *LuaVM) GetEnv() *lua.LTable {
 	return l.l.Env
 }
@@ -294,6 +295,7 @@ func (l *LuaVM) GetField(value lua.LValue, key string) (r lua.LValue) {
 	return l.l.GetField(value, key)
 }
 
+//Reset ...
 func (l *LuaVM) Reset() {
 	l.l.SetTop(0)
 }
@@ -302,7 +304,7 @@ func (l *LuaVM) Reset() {
 func (l *LuaVM) Clean() {
 	//清除堆栈和全局变量
 	l.l.SetTop(0)
-	//这里清除全局变量后lua无法定义全局变量,待查
+	//TODO 这里清除全局变量后lua无法定义全局变量,待查
 	//l.l.G.Global = l.l.CreateTable(0, 64)
 	l.easy = l.NewLuaTable()
 	l.easyInit = false
@@ -450,4 +452,58 @@ func (pl *LuaPool) Shutdown() {
 	for _, L := range pl.saved {
 		L.Close()
 	}
+}
+
+//Logger 日志接口,存放于easy.logger-interface
+type Logger interface {
+
+	//记录错误日志
+	//format	是输入日志格式，与Golang保持一致
+	//a...  	是输入参数，允许参数数量不定
+	Error(format string, a ...interface{})
+
+	//记录警告日志
+	//format	是输入日志格式，与Golang保持一致
+	//a...  	是输入参数，允许参数数量不定
+	Warn(format string, a ...interface{})
+
+	//记录通知日志
+	//format	是输入日志格式，与Golang保持一致
+	//a...  	是输入参数，允许参数数量不定
+	Trace(format string, a ...interface{})
+}
+
+//GetLogger 获取Logger接口
+func GetLogger(L *lua.LState) Logger {
+	v := L.GetGlobal("easy")
+	if v == nil {
+		return nil
+	}
+	if v.Type() != lua.LTTable {
+		return nil
+	}
+	easy, ok := v.(*lua.LTable)
+	if !ok || easy == nil {
+		return nil
+	}
+
+	v = easy.RawGetString("logger-interface")
+	if v == nil {
+		return nil
+	}
+	if v.Type() != lua.LTUserData {
+		return nil
+	}
+	userData, ok := v.(*lua.LUserData)
+	if !ok || userData == nil {
+		return nil
+	}
+	if userData.Value == nil {
+		return nil
+	}
+	log, ok := userData.Value.(Logger)
+	if !ok {
+		return nil
+	}
+	return log
 }
