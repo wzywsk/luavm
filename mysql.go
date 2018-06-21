@@ -131,7 +131,11 @@ func (my *mysqlState) logger(L *lua.LState) int {
 	str := L.CheckString(1)
 	_, err := my.db.Exec(str)
 	if err != nil {
-		my.l.Error(err.Error())
+		if l := len(str); l > 0 && str[l-1] == '\n' {
+			my.l.Error("  <mysql> logger error: %v\n  <sql->\n%s  <-sql>\n", err.Error(), str)
+		} else {
+			my.l.Error("  <mysql> logger error: %v\n  <sql->\n%s\n  <-sql>\n", err.Error(), str)
+		}
 		return 0
 	}
 	return 0
