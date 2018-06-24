@@ -6,6 +6,7 @@ import (
 	"log"
 	"sync"
 
+	mapCtx "github.com/yireyun/go_context"
 	"github.com/yuin/gluamapper"
 	"github.com/yuin/gopher-lua"
 	"layeh.com/gopher-json"
@@ -38,6 +39,11 @@ func (l *LuaVM) Close() {
 		return
 	}
 	l.l.Close()
+}
+
+//GetContext 设置上下文,一般用来设置超时时间
+func (l *LuaVM) GetContext() context.Context {
+	return l.l.Context()
 }
 
 //SetContext 设置上下文,一般用来设置超时时间
@@ -437,7 +443,7 @@ func (pl *LuaPool) new() *LuaVM {
 	L.LoadLibs(pl.mysql.Loader, pl.redis.Loader, pl.mgo.Loader)
 	L.easy = L.NewLuaTable()
 	//初始化context
-	ctx := context.WithValue(context.Background(), tranfunc("addTran"), L.addTran)
+	ctx := mapCtx.WithValue(context.Background(), tranfunc("addTran"), L.addTran)
 	L.l.SetContext(ctx)
 	return L
 }
