@@ -65,17 +65,23 @@ func (l *luaMysql) connect(L *lua.LState) int {
 	my.RawSetString("rollback", L.NewFunction(m.rollback))
 	my.RawSetString("logger", L.NewFunction(m.logger))
 	//添加mysql事务状态
-	if ctx := L.Context(); ctx != nil {
-		f := ctx.Value(tranfunc("addTran")).(func(*mysqlState))
-		f(m)
-	} else {
+	ctx := L.Context()
+	if ctx == nil {
 		pushTwoErr(fmt.Errorf("ctx为空"), L)
 		return 2
 	}
-	//获取Logger接口
-	logger := GetLogger(L)
-	m.SetLogger(logger)
-
+	//注册数据库连接状态
+	if addFunc, ok := ctx.Value("addTran").(func(*mysqlState)); ok {
+		addFunc(m)
+	}
+	//初始化日志接口
+	if logger, ok := ctx.Value(loggerInterface).(Logger); ok {
+		m.SetLogger(logger)
+	}
+	//回调注入插件方法
+	if injecter, ok := ctx.Value(injectInterface).(Injecter); ok {
+		my = injecter.InjectMysql(my)
+	}
 	L.Push(my)
 	return 1
 }
