@@ -13,6 +13,10 @@ import (
 	"layeh.com/gopher-luar"
 )
 
+const (
+	loggerInterface = "logger-interface"
+)
+
 //LuaVM lua虚拟机,每一个lua脚本维护一个lua状态
 type LuaVM struct {
 	lock     sync.Mutex
@@ -319,6 +323,25 @@ func (l *LuaVM) Clean() {
 	//l.l.G.Global = l.l.CreateTable(0, 64)
 	l.easy = l.NewLuaTable()
 	l.easyInit = false
+}
+
+//Logger 日志接口,从context中取出
+type Logger interface {
+
+	//记录错误日志
+	//format	是输入日志格式，与Golang保持一致
+	//a...  	是输入参数，允许参数数量不定
+	Error(format string, a ...interface{})
+
+	//记录警告日志
+	//format	是输入日志格式，与Golang保持一致
+	//a...  	是输入参数，允许参数数量不定
+	Warn(format string, a ...interface{})
+
+	//记录通知日志
+	//format	是输入日志格式，与Golang保持一致
+	//a...  	是输入参数，允许参数数量不定
+	Trace(format string, a ...interface{})
 }
 
 //加入easy全局对象
