@@ -4,29 +4,27 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
+type sqlConfig struct {
+	Name     string
+	Type     string
+	Addr     string
+	User     string
+	Passwd   string
+	DataBase string
+}
+
 type luaConfig struct {
 	Redis struct {
 		Addr     string
 		Passwd   string
 		DataBase int
 	}
-	MainMySQL struct {
-		Addr     string
-		User     string
-		Passwd   string
-		DataBase string
-	}
-	SalveMySQL struct {
-		Addr     string
-		User     string
-		Passwd   string
-		DataBase string
-	}
 	Mongodb struct {
 		Addr   string
 		User   string
 		Passwd string
 	}
+	SQLS []*sqlConfig `toml:"SQL"`
 }
 
 func (l *luaConfig) LoadFromFile(filename string) (err error) {

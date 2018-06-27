@@ -3,6 +3,7 @@ package luavm
 import (
 	"database/sql"
 	"fmt"
+	"net/url"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -10,36 +11,63 @@ import (
 	"github.com/yuin/gopher-lua"
 )
 
-//luaMysql lua容器mysql注入插件,将根据配置初始化多个数据库
-type luaMysql struct {
-	lock *sync.Mutex
-	db   map[string]*sql.DB
+//luaSQL lua容器sql注入插件,将根据配置初始化多个数据库
+type luaSQL struct {
+	lock      *sync.Mutex
+	db        map[string]*sql.DB
+	name2type map[string]string //记录名字对应数据库类型
 }
 
-//newLuaMysql ...
-func newLuaMysql() *luaMysql {
-	l := new(luaMysql)
+//newLuaSQL ...
+func newLuaSQL() *luaSQL {
+	l := new(luaSQL)
 	l.lock = new(sync.Mutex)
-	l.db = make(map[string]*sql.DB)
+	l.db = make(map[string]*sql.DB, 10)
+	l.name2type = make(map[string]string, 10)
 	return l
 }
 
-//Init 初始化mysql插件
+//Init 初始化sql插件
 //格式为第一个名称,第二个source
-func (l *luaMysql) Init(conf []string) (err error) {
-	for i := 0; i < len(conf); i = i + 2 {
-		//db, err := sql.Open("mysql", "root:easy@tcp(192.168.1.30:3306)/graph?charset=utf8")
-		db, err := sql.Open("mysql", conf[i+1])
-		if err != nil {
-			return err
+func (l *luaSQL) Init(cs []*sqlConfig) (err error) {
+	var source string
+	for _, c := range cs {
+		var db *sql.DB
+		switch c.Type {
+		case "mysql":
+			source = fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8", c.User, c.Passwd, c.Addr, c.DataBase)
+			db, err = sql.Open("mysql", source)
+			if err != nil {
+				return err
+			}
+		case "mssql":
+			query := url.Values{}
+			query.Add("connection+timeout", "30")
+			query.Add("encrypt", "disable")
+			query.Add("database", c.DataBase)
+
+			u := &url.URL{
+				Scheme:   "sqlserver",
+				User:     url.UserPassword(c.User, c.Passwd),
+				Host:     c.Addr,
+				RawQuery: query.Encode(),
+			}
+			db, err = sql.Open("mssql", u.String())
+			if err != nil {
+				return err
+			}
+		default:
+			err = fmt.Errorf("未知数据库类型[%s]", c.Type)
+			return
 		}
-		l.db[conf[i]] = db
+		l.db[c.Name] = db
+		l.name2type[c.Name] = c.Type
 	}
 	return nil
 }
 
 //Loader ...
-func (l *luaMysql) Loader(L *lua.LState) int {
+func (l *luaSQL) Loader(L *lua.LState) int {
 	var exports = map[string]lua.LGFunction{
 		"connect": l.connect,
 	}
@@ -48,14 +76,15 @@ func (l *luaMysql) Loader(L *lua.LState) int {
 	return 1
 }
 
-func (l *luaMysql) connect(L *lua.LState) int {
+func (l *luaSQL) connect(L *lua.LState) int {
 	name := L.CheckString(1)
 	db := l.db[name]
 	if db == nil {
 		pushTwoErr(fmt.Errorf("数据库[%s]不存在", name), L)
 		return 2
 	}
-	m := newMysqlState(db)
+	sqlType := l.name2type[name]
+	m := newSQLState(db, sqlType)
 	my := L.NewTable()
 	my.RawSetString("query", L.NewFunction(m.query))
 	my.RawSetString("queryRow", L.NewFunction(m.queryrow))
@@ -64,10 +93,10 @@ func (l *luaMysql) connect(L *lua.LState) int {
 	my.RawSetString("commit", L.NewFunction(m.commit))
 	my.RawSetString("rollback", L.NewFunction(m.rollback))
 	my.RawSetString("logger", L.NewFunction(m.logger))
-	//添加mysql事务状态
+	//添加sql事务状态
 	ctx := L.Context()
 	//注册数据库连接状态
-	if addFunc, ok := ctx.Value("addTran").(func(*mysqlState)); ok {
+	if addFunc, ok := ctx.Value("addTran").(func(*sqlState)); ok {
 		addFunc(m)
 	}
 	//初始化日志接口
@@ -79,21 +108,23 @@ func (l *luaMysql) connect(L *lua.LState) int {
 }
 
 //同一时间只能维护一个事务
-type mysqlState struct {
-	status int32 //记录事务状态
-	db     *sql.DB
-	tx     *sql.Tx
-	l      Logger
+type sqlState struct {
+	status  int32  //记录事务状态
+	sqlType string //数据库类型
+	db      *sql.DB
+	tx      *sql.Tx
+	l       Logger
 }
 
-func newMysqlState(db *sql.DB) *mysqlState {
-	m := new(mysqlState)
+func newSQLState(db *sql.DB, sqlType string) *sqlState {
+	m := new(sqlState)
 	m.db = db
+	m.sqlType = sqlType
 	return m
 }
 
 //SetLogger ...
-func (my *mysqlState) SetLogger(l Logger) {
+func (my *sqlState) SetLogger(l Logger) {
 	my.l = l
 }
 
@@ -124,22 +155,22 @@ func GetArgs(L *lua.LState) (cmd string, args []interface{}, err error) {
 	return
 }
 
-//插入mysql日志表专用,不走事务,直接返回错误
-func (my *mysqlState) logger(L *lua.LState) int {
+//插入sql日志表专用,不走事务,直接返回错误
+func (my *sqlState) logger(L *lua.LState) int {
 	str := L.CheckString(1)
 	_, err := my.db.Exec(str)
 	if err != nil {
 		if l := len(str); l > 0 && str[l-1] == '\n' {
-			my.l.Error("  <mysql> logger error: %v\n  <sql->\n%s  <-sql>\n", err.Error(), str)
+			my.l.Error("  <%s> logger error: %v\n  <sql->\n%s  <-sql>\n", my.sqlType, err.Error(), str)
 		} else {
-			my.l.Error("  <mysql> logger error: %v\n  <sql->\n%s\n  <-sql>\n", err.Error(), str)
+			my.l.Error("  <%s> logger error: %v\n  <sql->\n%s\n  <-sql>\n", my.sqlType, err.Error(), str)
 		}
 		return 0
 	}
 	return 0
 }
 
-func (my *mysqlState) query(L *lua.LState) int {
+func (my *sqlState) query(L *lua.LState) int {
 	cmd, args, err := GetArgs(L)
 	if err != nil {
 		pushTwoErr(err, L)
@@ -198,7 +229,7 @@ func (my *mysqlState) query(L *lua.LState) int {
 	return 1
 }
 
-func (my *mysqlState) queryrow(L *lua.LState) int {
+func (my *sqlState) queryrow(L *lua.LState) int {
 	cmd, args, err := GetArgs(L)
 	if err != nil {
 		pushTwoErr(err, L)
@@ -254,7 +285,7 @@ func (my *mysqlState) queryrow(L *lua.LState) int {
 	return 1
 }
 
-func (my *mysqlState) exec(L *lua.LState) int {
+func (my *sqlState) exec(L *lua.LState) int {
 	//检查事务状态
 	if atomic.LoadInt32(&my.status) == 0 {
 		pushTwoErr(fmt.Errorf("请先开始事务"), L)
@@ -283,7 +314,7 @@ func (my *mysqlState) exec(L *lua.LState) int {
 	return 1
 }
 
-func (my *mysqlState) begin(L *lua.LState) int {
+func (my *sqlState) begin(L *lua.LState) int {
 	if !atomic.CompareAndSwapInt32(&my.status, 0, 1) {
 		L.Push(lua.LString("事务已经开始"))
 		return 1
@@ -298,7 +329,7 @@ func (my *mysqlState) begin(L *lua.LState) int {
 
 }
 
-func (my *mysqlState) rollback(L *lua.LState) int {
+func (my *sqlState) rollback(L *lua.LState) int {
 	if !atomic.CompareAndSwapInt32(&my.status, 1, 0) {
 		L.Push(lua.LString("请先开始事务"))
 		return 1
@@ -312,7 +343,7 @@ func (my *mysqlState) rollback(L *lua.LState) int {
 
 }
 
-func (my *mysqlState) commit(L *lua.LState) int {
+func (my *sqlState) commit(L *lua.LState) int {
 	if !atomic.CompareAndSwapInt32(&my.status, 1, 0) {
 		L.Push(lua.LString("请先开始事务"))
 		return 1

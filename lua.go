@@ -24,7 +24,7 @@ type LuaVM struct {
 	conf     *luaConfig
 	easy     *lua.LTable //easy 全局对象
 	easyInit bool
-	trans    []*mysqlState //mysql事务状态
+	trans    []*sqlState //mysql事务状态
 }
 
 //NewLuaVM ...
@@ -65,8 +65,8 @@ func (l *LuaVM) LoadLibs(ml, rl, gl lua.LGFunction) {
 	}
 	//加载json插件
 	l.PreLoadModule("json", json.Loader)
-	//加载mysql插件
-	l.PreLoadModule("mysql", ml)
+	//加载sql插件
+	l.PreLoadModule("sql", ml)
 	//加载redis插件
 	l.PreLoadModule("redis", rl)
 	//加载mongodb插件
@@ -161,7 +161,7 @@ func (l *LuaVM) DoFile(busi, trancode string) (err error) {
 }
 
 //添加mysql事务状态
-func (l *LuaVM) addTran(tran *mysqlState) {
+func (l *LuaVM) addTran(tran *sqlState) {
 	l.trans = append(l.trans, tran)
 }
 
@@ -359,8 +359,8 @@ type LuaPool struct {
 	m     sync.Mutex
 	saved []*LuaVM
 	conf  *luaConfig
-	//mysql插件
-	mysql *luaMysql
+	//sql插件
+	sql *luaSQL
 	//redis插件
 	redis *luaRedis
 	//mongodb插件
@@ -416,17 +416,9 @@ func (pl *LuaPool) InitFromConf(conf string) (err error) {
 
 //InitDB 初始化数据库
 func (pl *LuaPool) initDB() (err error) {
-	//初始化mysql插件
-	my1 := pl.conf.MainMySQL
-	my2 := pl.conf.SalveMySQL
-	conf := []string{
-		"main",
-		fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8", my1.User, my1.Passwd, my1.Addr, my1.DataBase),
-		"salve",
-		fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8", my2.User, my2.Passwd, my2.Addr, my2.DataBase),
-	}
-	pl.mysql = newLuaMysql()
-	if err = pl.mysql.Init(conf); err != nil {
+	//初始化sql插件
+	pl.sql = newLuaSQL()
+	if err = pl.sql.Init(pl.conf.SQLS); err != nil {
 		return
 	}
 	//初始化redis插件
@@ -463,7 +455,7 @@ type tranfunc string
 //这里将加载lua库和初始化easy全局变量
 func (pl *LuaPool) new() *LuaVM {
 	L := NewLuaVM(pl.conf)
-	L.LoadLibs(pl.mysql.Loader, pl.redis.Loader, pl.mgo.Loader)
+	L.LoadLibs(pl.sql.Loader, pl.redis.Loader, pl.mgo.Loader)
 	L.easy = L.NewLuaTable()
 	//初始化context
 	ctx := mapCtx.WithValue(context.Background(), tranfunc("addTran"), L.addTran)
