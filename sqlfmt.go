@@ -477,3 +477,21 @@ func (my *sqlState) sqlUpdate(L *lua.LState) int {
 	L.Push(lua.LString(f.String()))
 	return 1
 }
+
+func (my *sqlState) fmtSQL(L *lua.LState) int {
+	cmd, args, err := getCmdArgs(my.sqlType, L)
+	if err != nil {
+		pushTwoErr(fmt.Errorf("参数类型不正确,至少1而不是%d", L.GetTop()), L)
+		return 2
+	}
+	var buff strings.Builder
+	if l := len(cmd); l > 0 && cmd[0] != '\t' {
+		buff.WriteString("\t")
+	}
+	buff.WriteString(fmt.Sprintf(cmd, args...))
+	if buff.String()[buff.Len()-1] != '\n' {
+		buff.WriteString("\n")
+	}
+	L.Push(lua.LString(buff.String()))
+	return 1
+}
