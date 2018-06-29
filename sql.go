@@ -93,6 +93,9 @@ func (l *luaSQL) connect(L *lua.LState) int {
 	my.RawSetString("commit", L.NewFunction(m.commit))
 	my.RawSetString("rollback", L.NewFunction(m.rollback))
 	my.RawSetString("logger", L.NewFunction(m.logger))
+	my.RawSetString("insert", L.NewFunction(m.sqlInsert))
+	my.RawSetString("select", L.NewFunction(m.sqlSelect))
+	my.RawSetString("update", L.NewFunction(m.sqlUpdate))
 	//添加sql事务状态
 	ctx := L.Context()
 	//注册数据库连接状态

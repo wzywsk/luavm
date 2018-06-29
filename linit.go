@@ -1,6 +1,9 @@
 package luavm
 
-import lua "github.com/yuin/gopher-lua"
+import (
+	"github.com/BurntSushi/toml"
+	lua "github.com/yuin/gopher-lua"
+)
 
 const (
 	//BaseLibName lua基本函数
@@ -50,6 +53,49 @@ func (l *LuaVM) OpenLibs() {
 		l.l.Push(lua.LString(lib.libName))
 		l.l.Call(1, 0)
 	}
+}
+
+type sqlConfig struct {
+	Name     string
+	Type     string
+	Addr     string
+	User     string
+	Passwd   string
+	DataBase string
+}
+
+type luaConfig struct {
+	Redis struct {
+		Addr     string
+		Passwd   string
+		DataBase int
+	}
+	Mongodb struct {
+		Addr   string
+		User   string
+		Passwd string
+	}
+	SQLS []*sqlConfig `toml:"SQL"`
+}
+
+func (l *luaConfig) LoadFromFile(filename string) (err error) {
+	if l == nil {
+		l = new(luaConfig)
+	}
+	if _, err = toml.DecodeFile(filename, l); err != nil {
+		return
+	}
+	return nil
+}
+
+func (l *luaConfig) LoadFromConf(conf string) (err error) {
+	if l == nil {
+		l = new(luaConfig)
+	}
+	if _, err = toml.Decode(conf, l); err != nil {
+		return
+	}
+	return nil
 }
 
 var bigintLib = `
