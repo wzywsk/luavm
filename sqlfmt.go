@@ -1,8 +1,11 @@
 package luavm
 
 import (
+	"database/sql"
 	"fmt"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"unsafe"
 
 	"github.com/yuin/gopher-lua"
@@ -233,11 +236,20 @@ func genInsertValue(sqlType string, buff *strings.Builder, value lua.LValue) {
 	return
 }
 
-//格式化Insert SQL CMD
-func (my *sqlState) sqlInsert(L *lua.LState) int {
-	if L.GetTop() != 2 {
-		pushTwoErr(fmt.Errorf("参数不正确, 只能为2而不是%d", L.GetTop()), L)
+func (my *sqlState) fmtInsert(L *lua.LState) int {
+	str, err := my.fmtInsertSQL(L)
+	if err != nil {
+		pushTwoErr(err, L)
 		return 2
+	}
+	L.Push(lua.LString(str))
+	return 1
+}
+
+func (my *sqlState) fmtInsertSQL(L *lua.LState) (str string, err error) {
+	if L.GetTop() != 2 {
+		err = fmt.Errorf("参数不正确, 只能为2而不是%d", L.GetTop())
+		return
 	}
 
 	var table = L.CheckString(1)
@@ -251,14 +263,14 @@ func (my *sqlState) sqlInsert(L *lua.LState) int {
 	key, value := fields.Next(lua.LNil)
 	for key.Type() != lua.LTNil {
 		if key.Type() != lua.LTString {
-			pushTwoErr(fmt.Errorf("key类型[%s]不为String", key.Type().String()), L)
-			return 2
+			err = fmt.Errorf("key类型[%s]不为String", key.Type().String())
+			return
 		}
 		genInsertField(my.sqlType, &f, index, key)
 
 		if t := value.Type(); t != lua.LTBool && t != lua.LTNumber && t != lua.LTString {
-			pushTwoErr(fmt.Errorf("val类型[%s]不为String或Bool或Number", key.Type().String()), L)
-			return 2
+			err = fmt.Errorf("val类型[%s]不为String或Bool或Number", key.Type().String())
+			return
 		}
 		if index > 0 {
 			v.WriteString(" ,")
@@ -270,8 +282,37 @@ func (my *sqlState) sqlInsert(L *lua.LState) int {
 	f.WriteString(")")
 	v.WriteString(")")
 	f.WriteString(v.String())
-	L.Push(lua.LString(f.String()))
+	return f.String(), nil
+}
+
+func (my *sqlState) sqlInsert(L *lua.LState) int {
+	//检查事务状态
+	if atomic.LoadInt32(&my.status) == 0 {
+		pushTwoErr(fmt.Errorf("请先开始事务"), L)
+		return 2
+	}
+	str, err := my.fmtInsertSQL(L)
+	if err != nil {
+		pushTwoErr(err, L)
+		return 2
+	}
+	result, err := my.tx.Exec(str)
+	if err != nil {
+		pushTwoErr(err, L)
+		return 2
+	}
+	t := L.NewTable()
+	lastInsertID, err := result.LastInsertId()
+	if err == nil {
+		L.SetField(t, "insertid", lua.LNumber(float64(lastInsertID)))
+	}
+	affectRow, err := result.RowsAffected()
+	if err == nil {
+		L.SetField(t, "affected", lua.LNumber(float64(affectRow)))
+	}
+	L.Push(t)
 	return 1
+
 }
 
 func genSelectField(sqlType string, buff *strings.Builder, key, value lua.LValue) {
@@ -309,16 +350,85 @@ func genSelectField(sqlType string, buff *strings.Builder, key, value lua.LValue
 }
 
 //格式化Select SQL CMD
-func (my *sqlState) sqlSelect(L *lua.LState) int {
-	if L.GetTop() < 2 {
-		pushTwoErr(fmt.Errorf("参数不正确, 至少为2而不是%d", L.GetTop()), L)
+func (my *sqlState) fmtSelect(L *lua.LState) int {
+	str, err := my.fmtSelectSQL(L)
+	if err != nil {
+		pushTwoErr(err, L)
 		return 2
+	}
+	L.Push(lua.LString(str))
+	return 1
+}
+
+func (my *sqlState) sqlSelect(L *lua.LState) int {
+	str, err := my.fmtSelectSQL(L)
+	if err != nil {
+		pushTwoErr(err, L)
+		return 2
+	}
+	fmt.Println(str)
+	rows, err := my.db.Query(str)
+	if err != nil {
+		pushTwoErr(err, L)
+		return 2
+	}
+	defer rows.Close()
+
+	//获取每一行的数据类型和个数
+	cols, err := rows.ColumnTypes()
+	if err != nil {
+		pushTwoErr(err, L)
+		return 2
+	}
+	m := make([]interface{}, len(cols))
+	values := make([]sql.RawBytes, len(cols))
+	for i := range m {
+		m[i] = &values[i]
+	}
+	//这里存放读取的所有数据
+	all := L.NewTable()
+	//读出所有数据并转换为lua数据类型
+	//lua 数组下标从1开始
+	index := 1
+	for rows.Next() {
+		if err = rows.Scan(m...); err != nil {
+			pushTwoErr(err, L)
+			return 2
+		}
+		table := L.NewTable()
+		for i := range values {
+			switch cols[i].DatabaseTypeName() {
+			case "INT", "BIGINT", "FLOAT", "DOUBLE":
+				val, err := strconv.ParseFloat(string(values[i]), 64)
+				if err != nil {
+					pushTwoErr(err, L)
+					return 2
+				}
+				L.SetField(table, cols[i].Name(), lua.LNumber(val))
+			default:
+				L.SetField(table, cols[i].Name(), lua.LString(string(values[i])))
+			}
+		}
+		L.RawSetInt(all, index, table)
+		index++
+	}
+	if rows.Err() != nil {
+		pushTwoErr(err, L)
+		return 2
+	}
+	L.Push(all)
+	return 1
+}
+
+func (my *sqlState) fmtSelectSQL(L *lua.LState) (str string, err error) {
+	if L.GetTop() < 2 {
+		err = fmt.Errorf("参数不正确, 至少为2而不是%d", L.GetTop())
+		return
 	}
 	var table = L.CheckString(1)
 	var fields = L.CheckTable(2)
 	var where string
 	var args []interface{}
-	var err error
 	if L.GetTop() > 2 {
 		where = L.CheckString(3)
 	}
@@ -326,8 +436,8 @@ func (my *sqlState) sqlSelect(L *lua.LState) int {
 		args, err = getArgs(my.sqlType, L, 3)
 	}
 	if err != nil {
-		pushTwoErr(fmt.Errorf("参数不正确%v", err), L)
-		return 2
+		err = fmt.Errorf("参数不正确%v", err)
+		return
 	}
 
 	//从Table中顺序遍历所有的属性
@@ -337,13 +447,13 @@ func (my *sqlState) sqlSelect(L *lua.LState) int {
 	key, value := fields.Next(lua.LNil)
 	for key.Type() != lua.LTNil {
 		if key.Type() != lua.LTString {
-			pushTwoErr(fmt.Errorf("key类型[%s]不为String", key.Type().String()), L)
-			return 2
+			err = fmt.Errorf("key类型[%s]不为String", key.Type().String())
+			return
 		}
 
 		if t := value.Type(); t != lua.LTBool && t != lua.LTNumber && t != lua.LTString {
 			pushTwoErr(fmt.Errorf("val类型[%s]不为String或Bool或Number", key.Type().String()), L)
-			return 2
+			return
 		}
 		if index > 0 {
 			f.WriteString(" ,")
@@ -355,11 +465,10 @@ func (my *sqlState) sqlSelect(L *lua.LState) int {
 
 	f.WriteString(fmt.Sprintf(" from %s", quote(my.sqlType, table)))
 	if len(where) > 0 {
-		f.WriteString(" where")
+		f.WriteString(" where ")
 		f.WriteString(fmt.Sprintf(where, args...))
 	}
-	L.Push(lua.LString(f.String()))
-	return 1
+	return f.String(), nil
 }
 
 func genUpdate(sqlType string, buff *strings.Builder, key, value lua.LValue) {
@@ -393,7 +502,7 @@ func genUpdate(sqlType string, buff *strings.Builder, key, value lua.LValue) {
 }
 
 //格式化Update SQL CMD
-func (my *sqlState) sqlUpdate(L *lua.LState) int {
+func (my *sqlState) fmtUpate(L *lua.LState) int {
 	if L.GetTop() < 3 {
 		pushTwoErr(fmt.Errorf("参数不正确, 至少为3而不是%d", L.GetTop()), L)
 		return 2

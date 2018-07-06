@@ -95,7 +95,9 @@ func (l *luaSQL) connect(L *lua.LState) int {
 	my.RawSetString("logger", L.NewFunction(m.logger))
 	my.RawSetString("insert", L.NewFunction(m.sqlInsert))
 	my.RawSetString("select", L.NewFunction(m.sqlSelect))
-	my.RawSetString("update", L.NewFunction(m.sqlUpdate))
+	my.RawSetString("fmtInsert", L.NewFunction(m.fmtInsert))
+	my.RawSetString("fmtSelect", L.NewFunction(m.fmtSelect))
+	my.RawSetString("fmtUpdate", L.NewFunction(m.fmtUpate))
 	my.RawSetString("fmtSQL", L.NewFunction(m.fmtSQL))
 	//添加sql事务状态
 	ctx := L.Context()

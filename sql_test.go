@@ -76,58 +76,8 @@ func TestMysql(t *testing.T) {
 	}
 }
 
-func BenchmarkMysql(b *testing.B) {
-	b.ReportAllocs()
-	b.RunParallel(func(pb *testing.PB) {
-		pool := NewLuaPool()
-
-		conf := []*sqlConfig{
-			&sqlConfig{
-				Name:     "mysql-main",
-				Type:     "mysql",
-				Addr:     "192.168.1.22:3306",
-				User:     "root",
-				Passwd:   "easy",
-				DataBase: "test",
-			},
-		}
-		my := newLuaSQL()
-		if err := my.Init(conf); err != nil {
-			b.Fatal(err)
-		}
-
-		script := `
-		local mysql = require("sql")
-		conn, err = mysql.connect("mysql-main")
-		if(conn == nil) then
-			error(err)
-		end
-		--[[
-		row, err = conn.queryrow("select * from user where name = ?", "lisi")
-		if (row == nil) then
-			error(err)
-		end
-		--]]
-		conn.begin()
-		result ,err = conn.exec("update user set age = ? where name = ?", 20, "lisi")
-		if (result == nil) then
-			error(err)
-		end
-		conn.commit()
-		`
-		for pb.Next() {
-			vm := pool.Get()
-			vm.PreLoadModule("sql", my.Loader)
-			if _, _, err := vm.DoString(script); err != nil {
-				b.Fatal(err)
-			}
-			pool.Put(vm)
-		}
-
-	})
-}
-
 func TestMssql(t *testing.T) {
+	t.Skip()
 	pool := NewLuaPool()
 	vm := pool.Get()
 	defer pool.Put(vm)
@@ -237,6 +187,57 @@ func BenchmarkMssql(b *testing.B) {
 		for pb.Next() {
 			vm := pool.Get()
 			vm.PreLoadModule("mysql", my.Loader)
+			if _, _, err := vm.DoString(script); err != nil {
+				b.Fatal(err)
+			}
+			pool.Put(vm)
+		}
+
+	})
+}
+
+func BenchmarkMysql(b *testing.B) {
+	b.ReportAllocs()
+	b.RunParallel(func(pb *testing.PB) {
+		pool := NewLuaPool()
+
+		conf := []*sqlConfig{
+			&sqlConfig{
+				Name:     "mysql-main",
+				Type:     "mysql",
+				Addr:     "192.168.1.22:3306",
+				User:     "root",
+				Passwd:   "easy",
+				DataBase: "test",
+			},
+		}
+		my := newLuaSQL()
+		if err := my.Init(conf); err != nil {
+			b.Fatal(err)
+		}
+
+		script := `
+		local mysql = require("sql")
+		conn, err = mysql.connect("mysql-main")
+		if(conn == nil) then
+			error(err)
+		end
+		--[[
+		row, err = conn.queryrow("select * from user where name = ?", "lisi")
+		if (row == nil) then
+			error(err)
+		end
+		--]]
+		conn.begin()
+		result ,err = conn.exec("update user set age = ? where name = ?", 20, "lisi")
+		if (result == nil) then
+			error(err)
+		end
+		conn.commit()
+		`
+		for pb.Next() {
+			vm := pool.Get()
+			vm.PreLoadModule("sql", my.Loader)
 			if _, _, err := vm.DoString(script); err != nil {
 				b.Fatal(err)
 			}
