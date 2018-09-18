@@ -66,7 +66,8 @@ func (l *LuaVM) LoadLibs(ml, rl, gl lua.LGFunction) {
 	//加载json插件
 	l.PreLoadModule("json", json.Loader)
 	//加载sql插件
-	l.PreLoadModule("sql", ml)
+	l.PreLoadModule("mysql", ml)
+	l.PreLoadModule("mssql", ml)
 	//加载redis插件
 	l.PreLoadModule("redis", rl)
 	//加载mongodb插件

@@ -26,10 +26,10 @@ func TestMysql(t *testing.T) {
 	if err := my.Init(conf); err != nil {
 		t.Fatal(err)
 	}
-	vm.PreLoadModule("sql", my.Loader)
+	vm.PreLoadModule("mysql", my.Loader)
 
 	script := `
-		local mysql = require("sql")
+		local mysql = require("mysql")
 		conn, err = mysql.connect("mysql-main")
 		if(conn == nil) then
 			error(err)
@@ -96,10 +96,10 @@ func TestMssql(t *testing.T) {
 	if err := my.Init(conf); err != nil {
 		t.Fatal(err)
 	}
-	vm.PreLoadModule("sql", my.Loader)
+	vm.PreLoadModule("mssql", my.Loader)
 
 	script := `
-		local mysql = require("sql")
+		local mysql = require("mssql")
 		conn, err = mysql.connect("mssql-main")
 		if(conn == nil) then
 			error(err)
