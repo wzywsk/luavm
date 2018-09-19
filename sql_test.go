@@ -8,6 +8,7 @@ import (
 )
 
 func TestMysql(t *testing.T) {
+	//t.Skip()
 	pool := NewLuaPool()
 	vm := pool.Get()
 	defer pool.Put(vm)
@@ -22,15 +23,14 @@ func TestMysql(t *testing.T) {
 			DataBase: "test",
 		},
 	}
-	my := newLuaSQL()
+	my := newluaMySQL()
 	if err := my.Init(conf); err != nil {
 		t.Fatal(err)
 	}
 	vm.PreLoadModule("mysql", my.Loader)
-
 	script := `
 		local mysql = require("mysql")
-		conn, err = mysql.connect("mysql-main")
+		conn, err = mysql.connect("main")
 		if(conn == nil) then
 			error(err)
 		end
@@ -92,7 +92,7 @@ func TestMssql(t *testing.T) {
 			DataBase: "test",
 		},
 	}
-	my := newLuaSQL()
+	my := newluaMsSQL()
 	if err := my.Init(conf); err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +100,7 @@ func TestMssql(t *testing.T) {
 
 	script := `
 		local mysql = require("mssql")
-		conn, err = mysql.connect("mssql-main")
+		conn, err = mysql.connect("main")
 		if(conn == nil) then
 			error(err)
 		end
@@ -160,7 +160,7 @@ func BenchmarkMssql(b *testing.B) {
 				DataBase: "test",
 			},
 		}
-		my := newLuaSQL()
+		my := newluaMsSQL()
 		if err := my.Init(conf); err != nil {
 			b.Fatal(err)
 		}
@@ -211,7 +211,7 @@ func BenchmarkMysql(b *testing.B) {
 				DataBase: "test",
 			},
 		}
-		my := newLuaSQL()
+		my := newluaMySQL()
 		if err := my.Init(conf); err != nil {
 			b.Fatal(err)
 		}

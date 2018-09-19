@@ -11,11 +11,28 @@ import (
 	"github.com/yuin/gopher-lua"
 )
 
+//mysql 插件
+type luaMySQL struct {
+	*luaSQL
+}
+
+//mssql 插件
+type luaMsSQL struct {
+	*luaSQL
+}
+
+func newluaMySQL() *luaMySQL {
+	return &luaMySQL{newLuaSQL()}
+}
+
+func newluaMsSQL() *luaMsSQL {
+	return &luaMsSQL{newLuaSQL()}
+}
+
 //luaSQL lua容器sql注入插件,将根据配置初始化多个数据库
 type luaSQL struct {
-	lock      *sync.Mutex
-	db        map[string]*sql.DB
-	name2type map[string]string //记录名字对应数据库类型
+	lock *sync.Mutex
+	db   map[string]*sql.DB
 }
 
 //newLuaSQL ...
@@ -23,24 +40,31 @@ func newLuaSQL() *luaSQL {
 	l := new(luaSQL)
 	l.lock = new(sync.Mutex)
 	l.db = make(map[string]*sql.DB, 10)
-	l.name2type = make(map[string]string, 10)
 	return l
 }
 
-//Init 初始化sql插件
-//格式为第一个名称,第二个source
-func (l *luaSQL) Init(cs []*sqlConfig) (err error) {
+//Init 初始化mysql插件
+func (l *luaMySQL) Init(cs []*sqlConfig) (err error) {
 	var source string
 	for _, c := range cs {
 		var db *sql.DB
-		switch c.Type {
-		case "mysql":
+		if c.Type == "mysql" {
 			source = fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8", c.User, c.Passwd, c.Addr, c.DataBase)
 			db, err = sql.Open("mysql", source)
 			if err != nil {
 				return err
 			}
-		case "mssql":
+		}
+		l.db[c.Name] = db
+	}
+	return nil
+}
+
+//Init 初始化mssql插件
+func (l *luaMsSQL) Init(cs []*sqlConfig) (err error) {
+	for _, c := range cs {
+		var db *sql.DB
+		if c.Type == "mssql" {
 			query := url.Values{}
 			query.Add("connection+timeout", "30")
 			query.Add("encrypt", "disable")
@@ -56,18 +80,14 @@ func (l *luaSQL) Init(cs []*sqlConfig) (err error) {
 			if err != nil {
 				return err
 			}
-		default:
-			err = fmt.Errorf("未知数据库类型[%s]", c.Type)
-			return
 		}
 		l.db[c.Name] = db
-		l.name2type[c.Name] = c.Type
 	}
 	return nil
 }
 
 //Loader ...
-func (l *luaSQL) Loader(L *lua.LState) int {
+func (l *luaMySQL) Loader(L *lua.LState) int {
 	var exports = map[string]lua.LGFunction{
 		"connect": l.connect,
 	}
@@ -76,15 +96,68 @@ func (l *luaSQL) Loader(L *lua.LState) int {
 	return 1
 }
 
-func (l *luaSQL) connect(L *lua.LState) int {
+func (l *luaMySQL) connect(L *lua.LState) int {
 	name := L.CheckString(1)
+	//先查找name,如果没有查找sqltype-name
 	db := l.db[name]
 	if db == nil {
-		pushTwoErr(fmt.Errorf("数据库[%s]不存在", name), L)
-		return 2
+		db = l.db["mysql-"+name]
+		if db == nil {
+			pushTwoErr(fmt.Errorf("数据库[%s]不存在", name), L)
+			return 2
+		}
 	}
-	sqlType := l.name2type[name]
-	m := newSQLState(db, sqlType)
+	m := newSQLState(db, "mysql")
+	my := L.NewTable()
+	my.RawSetString("query", L.NewFunction(m.query))
+	my.RawSetString("queryRow", L.NewFunction(m.queryrow))
+	my.RawSetString("exec", L.NewFunction(m.exec))
+	my.RawSetString("begin", L.NewFunction(m.begin))
+	my.RawSetString("commit", L.NewFunction(m.commit))
+	my.RawSetString("rollback", L.NewFunction(m.rollback))
+	my.RawSetString("logger", L.NewFunction(m.logger))
+	my.RawSetString("insert", L.NewFunction(m.sqlInsert))
+	my.RawSetString("select", L.NewFunction(m.sqlSelect))
+	my.RawSetString("fmtInsert", L.NewFunction(m.fmtInsert))
+	my.RawSetString("fmtSelect", L.NewFunction(m.fmtSelect))
+	my.RawSetString("fmtUpdate", L.NewFunction(m.fmtUpate))
+	my.RawSetString("fmtSQL", L.NewFunction(m.fmtSQL))
+	//添加sql事务状态
+	ctx := L.Context()
+	//注册数据库连接状态
+	if addFunc, ok := ctx.Value("addTran").(func(*sqlState)); ok {
+		addFunc(m)
+	}
+	//初始化日志接口
+	if logger, ok := ctx.Value(loggerInterface).(Logger); ok {
+		m.SetLogger(logger)
+	}
+	L.Push(my)
+	return 1
+}
+
+//Loader ...
+func (l *luaMsSQL) Loader(L *lua.LState) int {
+	var exports = map[string]lua.LGFunction{
+		"connect": l.connect,
+	}
+	mod := L.SetFuncs(L.NewTable(), exports)
+	L.Push(mod)
+	return 1
+}
+
+func (l *luaMsSQL) connect(L *lua.LState) int {
+	name := L.CheckString(1)
+	//先查找name,如果没有查找sqltype-name
+	db := l.db[name]
+	if db == nil {
+		db = l.db["mssql-"+name]
+		if db == nil {
+			pushTwoErr(fmt.Errorf("数据库[%s]不存在", name), L)
+			return 2
+		}
+	}
+	m := newSQLState(db, "mssql")
 	my := L.NewTable()
 	my.RawSetString("query", L.NewFunction(m.query))
 	my.RawSetString("queryRow", L.NewFunction(m.queryrow))
