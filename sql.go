@@ -121,7 +121,7 @@ func (l *luaMySQL) connect(L *lua.LState) int {
 	my.RawSetString("fmtInsert", L.NewFunction(m.fmtInsert))
 	my.RawSetString("fmtSelect", L.NewFunction(m.fmtSelect))
 	my.RawSetString("fmtUpdate", L.NewFunction(m.fmtUpate))
-	my.RawSetString("fmtSQL", L.NewFunction(m.fmtSQL))
+	my.RawSetString("fmtSql", L.NewFunction(m.fmtSQL))
 	//添加sql事务状态
 	ctx := L.Context()
 	//注册数据库连接状态
@@ -171,7 +171,7 @@ func (l *luaMsSQL) connect(L *lua.LState) int {
 	my.RawSetString("fmtInsert", L.NewFunction(m.fmtInsert))
 	my.RawSetString("fmtSelect", L.NewFunction(m.fmtSelect))
 	my.RawSetString("fmtUpdate", L.NewFunction(m.fmtUpate))
-	my.RawSetString("fmtSQL", L.NewFunction(m.fmtSQL))
+	my.RawSetString("fmtSql", L.NewFunction(m.fmtSQL))
 	//添加sql事务状态
 	ctx := L.Context()
 	//注册数据库连接状态
