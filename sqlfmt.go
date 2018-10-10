@@ -146,11 +146,11 @@ func getArgs(sqlType string, L *lua.LState, top int) (args []interface{}, err er
 		case lua.LTNil:
 			args[i-top] = "null"
 		case lua.LTBool:
-			args[i-top] = L.ToBool(i)
+			args[i-top] = L.ToBool(i + 1)
 		case lua.LTNumber:
-			args[i-top] = L.ToNumber(i)
+			args[i-top] = L.ToNumber(i + 1)
 		case lua.LTString:
-			args[i-top] = fmtTxt(sqlType, L.ToString(i))
+			args[i-top] = fmtTxt(sqlType, L.ToString(i+1))
 		default:
 			err = fmt.Errorf("参数类型错误[%d]", i+1)
 			return
@@ -366,7 +366,7 @@ func (my *sqlState) sqlSelect(L *lua.LState) int {
 		pushTwoErr(err, L)
 		return 2
 	}
-	fmt.Println(str)
+
 	rows, err := my.db.Query(str)
 	if err != nil {
 		pushTwoErr(err, L)
@@ -380,6 +380,7 @@ func (my *sqlState) sqlSelect(L *lua.LState) int {
 		pushTwoErr(err, L)
 		return 2
 	}
+
 	m := make([]interface{}, len(cols))
 	values := make([]sql.RawBytes, len(cols))
 	for i := range m {
