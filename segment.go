@@ -61,6 +61,7 @@ func (my *segment) get(key string) (t *lua.LTable, err error) {
 			my.cacheSize--
 			return nil, errExpired
 		}
+		my.lruList.MoveToFront(e)
 		return item.value, nil
 	}
 	//从mysql中取出此元素并返回
