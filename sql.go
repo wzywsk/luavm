@@ -31,8 +31,9 @@ func newluaMsSQL() *luaMsSQL {
 
 //luaSQL lua容器sql注入插件,将根据配置初始化多个数据库
 type luaSQL struct {
-	lock *sync.Mutex
-	db   map[string]*sql.DB
+	lock  *sync.Mutex
+	db    map[string]*sql.DB
+	cache map[string]*Cache
 }
 
 //newLuaSQL ...
@@ -40,6 +41,7 @@ func newLuaSQL() *luaSQL {
 	l := new(luaSQL)
 	l.lock = new(sync.Mutex)
 	l.db = make(map[string]*sql.DB, 10)
+	l.cache = make(map[string]*Cache, 10)
 	return l
 }
 
@@ -56,6 +58,7 @@ func (l *luaMySQL) Init(cs []*sqlConfig) (err error) {
 			}
 		}
 		l.db[c.Name] = db
+		l.cache[c.Name] = NewCache(db)
 	}
 	return nil
 }
@@ -82,6 +85,7 @@ func (l *luaMsSQL) Init(cs []*sqlConfig) (err error) {
 			}
 		}
 		l.db[c.Name] = db
+		l.cache[c.Name] = NewCache(db)
 	}
 	return nil
 }
@@ -107,10 +111,19 @@ func (l *luaMySQL) connect(L *lua.LState) int {
 			return 2
 		}
 	}
-	m := newSQLState(db, "mysql")
+	cache := l.cache[name]
+	if cache == nil {
+		cache = l.cache["mysql-"+name]
+		if cache == nil {
+			pushTwoErr(fmt.Errorf("缓存[%s]不存在", name), L)
+			return 2
+		}
+	}
+	m := newSQLState(db, "mysql", cache)
 	my := L.NewTable()
 	my.RawSetString("query", L.NewFunction(m.query))
 	my.RawSetString("queryRow", L.NewFunction(m.queryrow))
+	my.RawSetString("queryCache", L.NewFunction(m.queryCache))
 	my.RawSetString("exec", L.NewFunction(m.exec))
 	my.RawSetString("begin", L.NewFunction(m.begin))
 	my.RawSetString("commit", L.NewFunction(m.commit))
@@ -157,10 +170,19 @@ func (l *luaMsSQL) connect(L *lua.LState) int {
 			return 2
 		}
 	}
-	m := newSQLState(db, "mssql")
+	cache := l.cache[name]
+	if db == nil {
+		cache = l.cache["mssql-"+name]
+		if db == nil {
+			pushTwoErr(fmt.Errorf("缓存[%s]不存在", name), L)
+			return 2
+		}
+	}
+	m := newSQLState(db, "mssql", cache)
 	my := L.NewTable()
 	my.RawSetString("query", L.NewFunction(m.query))
 	my.RawSetString("queryRow", L.NewFunction(m.queryrow))
+	my.RawSetString("queryCache", L.NewFunction(m.queryCache))
 	my.RawSetString("exec", L.NewFunction(m.exec))
 	my.RawSetString("begin", L.NewFunction(m.begin))
 	my.RawSetString("commit", L.NewFunction(m.commit))
@@ -193,12 +215,14 @@ type sqlState struct {
 	db      *sql.DB
 	tx      *sql.Tx
 	l       Logger
+	cache   *Cache
 }
 
-func newSQLState(db *sql.DB, sqlType string) *sqlState {
+func newSQLState(db *sql.DB, sqlType string, cache *Cache) *sqlState {
 	m := new(sqlState)
 	m.db = db
 	m.sqlType = sqlType
+	m.cache = cache
 	return m
 }
 
@@ -247,6 +271,24 @@ func (my *sqlState) logger(L *lua.LState) int {
 		return 0
 	}
 	return 0
+}
+
+func (my *sqlState) queryCache(L *lua.LState) int {
+	if L.GetTop() != 3 {
+		err := fmt.Errorf("参数个数错误[4]-[%d]", L.GetTop())
+		pushTwoErr(err, L)
+		return 2
+	}
+	key := L.CheckString(1)
+	cmd := L.CheckString(2)
+	expire := L.CheckInt(3)
+	value, err := my.cache.QueryCache(key, cmd, expire)
+	if err != nil {
+		pushTwoErr(err, L)
+		return 2
+	}
+	L.Push(value)
+	return 1
 }
 
 func (my *sqlState) query(L *lua.LState) int {
