@@ -171,9 +171,9 @@ func (l *luaMsSQL) connect(L *lua.LState) int {
 		}
 	}
 	cache := l.cache[name]
-	if db == nil {
+	if cache == nil {
 		cache = l.cache["mssql-"+name]
-		if db == nil {
+		if cache == nil {
 			pushTwoErr(fmt.Errorf("缓存[%s]不存在", name), L)
 			return 2
 		}
