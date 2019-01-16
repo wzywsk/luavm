@@ -70,12 +70,15 @@ func (cache *Cache) getMysqlData(sqlCommand string) (value *lua.LTable, err erro
 	value = L.NewTable()
 	//读出所有数据并转换为lua数据类型
 	//lua 数组下标从1开始
-	index := 1
+	index := 0
+	var table *lua.LTable
 	for rows.Next() {
 		if err = rows.Scan(m...); err != nil {
 			return
 		}
-		table := L.NewTable()
+		index++
+		table = L.NewTable()
+		L.SetField(table, "_rowNo", lua.LNumber(index))
 		for i := range values {
 			switch cols[i].DatabaseTypeName() {
 			case "INT", "BIGINT", "FLOAT", "DOUBLE":
@@ -89,7 +92,9 @@ func (cache *Cache) getMysqlData(sqlCommand string) (value *lua.LTable, err erro
 			}
 		}
 		L.RawSetInt(value, index, table)
-		index++
+	}
+	if index == 1 && table != nil {
+		value = table
 	}
 	if rows.Err() != nil {
 		return
