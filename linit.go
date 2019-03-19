@@ -62,6 +62,7 @@ type sqlConfig struct {
 	User     string
 	Passwd   string
 	DataBase string
+	Params   string
 }
 
 type luaConfig struct {

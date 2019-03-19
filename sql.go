@@ -51,7 +51,13 @@ func (l *luaMySQL) Init(cs []*sqlConfig) (err error) {
 	for _, c := range cs {
 		var db *sql.DB
 		if c.Type == "mysql" {
-			source = fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8", c.User, c.Passwd, c.Addr, c.DataBase)
+			if len(c.Params) > 0 {
+				source = fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8&%s",
+					c.User, c.Passwd, c.Addr, c.DataBase, c.Params)
+			} else {
+				source = fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8",
+					c.User, c.Passwd, c.Addr, c.DataBase)
+			}
 			db, err = sql.Open("mysql", source)
 			if err != nil {
 				return err

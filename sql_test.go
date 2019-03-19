@@ -22,6 +22,7 @@ func TestMysql(t *testing.T) {
 			User:     "root",
 			Passwd:   "easy",
 			DataBase: "test",
+			Params:   "multiStatements=true",
 		},
 	}
 	my := newluaMySQL()
