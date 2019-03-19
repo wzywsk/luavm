@@ -3,6 +3,7 @@ package luavm
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"net/url"
 	"strconv"
 	"sync"
@@ -47,19 +48,29 @@ func newLuaSQL() *luaSQL {
 
 //Init 初始化mysql插件
 func (l *luaMySQL) Init(cs []*sqlConfig) (err error) {
-	var source string
 	for _, c := range cs {
 		var db *sql.DB
 		if c.Type == "mysql" {
-			if len(c.Params) > 0 {
-				source = fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8&%s",
-					c.User, c.Passwd, c.Addr, c.DataBase, c.Params)
-			} else {
-				source = fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8",
-					c.User, c.Passwd, c.Addr, c.DataBase)
-			}
-			db, err = sql.Open("mysql", source)
+			qs, err := url.ParseQuery(c.Params)
 			if err != nil {
+				log.Printf("luaMySQL ParseQuery [%v] error, ERR: %v\n",
+					c.Params, err.Error())
+				qs = url.Values{}
+			}
+			if qs.Get("charset") == "" {
+				qs.Add("charset", "utf8")
+			}
+			if qs.Get("multiStatements") == "" {
+				qs.Add("multiStatements", "true")
+			}
+
+			myUrl := fmt.Sprintf("%s:%s@tcp(%s)/%s?%s",
+				c.User, c.Passwd, c.Addr, c.DataBase, qs.Encode())
+
+			db, err = sql.Open("mysql", myUrl)
+			if err != nil {
+				log.Printf("luaMySQL Open MSDB [%v] error, ERR: %v\n",
+					qs.Encode(), err.Error())
 				return err
 			}
 		}
@@ -74,19 +85,32 @@ func (l *luaMsSQL) Init(cs []*sqlConfig) (err error) {
 	for _, c := range cs {
 		var db *sql.DB
 		if c.Type == "mssql" {
-			query := url.Values{}
-			query.Add("connection+timeout", "30")
-			query.Add("encrypt", "disable")
-			query.Add("database", c.DataBase)
+			qs, err := url.ParseQuery(c.Params)
+			if err != nil {
+				log.Printf("luaMsSQL ParseQuery [%v] error, ERR: %v\n",
+					c.Params, err.Error())
+				qs = url.Values{}
+			}
+			if qs.Get("connection+timeout") == "" {
+				qs.Add("connection+timeout", "30")
+			}
+			if qs.Get("encrypt") == "" {
+				qs.Add("encrypt", "disable")
+			}
+			if qs.Get("database") == "" {
+				qs.Add("database", c.DataBase)
+			}
 
-			u := &url.URL{
+			msUrl := &url.URL{
 				Scheme:   "sqlserver",
 				User:     url.UserPassword(c.User, c.Passwd),
 				Host:     c.Addr,
-				RawQuery: query.Encode(),
+				RawQuery: qs.Encode(),
 			}
-			db, err = sql.Open("mssql", u.String())
+			db, err = sql.Open("mssql", msUrl.String())
 			if err != nil {
+				log.Printf("luaMsSQL Open MSDB [%v] error, ERR: %v\n",
+					qs.Encode(), err.Error())
 				return err
 			}
 		}
