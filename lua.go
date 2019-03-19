@@ -6,10 +6,11 @@ import (
 	"log"
 	"sync"
 
+	"game/luavm/internal/gopher-json"
+
 	mapCtx "github.com/yireyun/go_context"
 	"github.com/yuin/gluamapper"
 	"github.com/yuin/gopher-lua"
-	"layeh.com/gopher-json"
 	"layeh.com/gopher-luar"
 )
 
