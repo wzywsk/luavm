@@ -22,12 +22,21 @@ type luaMsSQL struct {
 	*luaSQL
 }
 
-func newluaMySQL() *luaMySQL {
+//sqlite 插件
+type luaSqlite struct {
+	*luaSQL
+}
+
+func newLuaMySQL() *luaMySQL {
 	return &luaMySQL{newLuaSQL()}
 }
 
-func newluaMsSQL() *luaMsSQL {
+func newLuaMsSQL() *luaMsSQL {
 	return &luaMsSQL{newLuaSQL()}
+}
+
+func newLuaSqlite() *luaSqlite {
+	return &luaSqlite{newLuaSQL()}
 }
 
 //luaSQL lua容器sql注入插件,将根据配置初始化多个数据库
@@ -111,6 +120,24 @@ func (l *luaMsSQL) Init(cs []*sqlConfig) (err error) {
 			if err != nil {
 				log.Printf("luaMsSQL Open MSDB [%v] error, ERR: %v\n",
 					qs.Encode(), err.Error())
+				return err
+			}
+		}
+		l.db[c.Name] = db
+		l.cache[c.Name] = NewCache(db)
+	}
+	return nil
+}
+
+//Init 初始化mssql插件
+func (l *luaSqlite) Init(cs []*sqlConfig) (err error) {
+	for _, c := range cs {
+		var db *sql.DB
+		if c.Type == "sqlite" {
+			db, err = sql.Open("sqlite3", c.Addr)
+			if err != nil {
+				log.Printf("luaSqlite Open MSDB [%v] error, ERR: %v\n",
+					c.Addr, err.Error())
 				return err
 			}
 		}
@@ -209,6 +236,65 @@ func (l *luaMsSQL) connect(L *lua.LState) int {
 		}
 	}
 	m := newSQLState(db, "mssql", cache)
+	my := L.NewTable()
+	my.RawSetString("query", L.NewFunction(m.query))
+	my.RawSetString("queryRow", L.NewFunction(m.queryrow))
+	my.RawSetString("queryCache", L.NewFunction(m.queryCache))
+	my.RawSetString("exec", L.NewFunction(m.exec))
+	my.RawSetString("begin", L.NewFunction(m.begin))
+	my.RawSetString("commit", L.NewFunction(m.commit))
+	my.RawSetString("rollback", L.NewFunction(m.rollback))
+	my.RawSetString("logger", L.NewFunction(m.logger))
+	my.RawSetString("insert", L.NewFunction(m.sqlInsert))
+	my.RawSetString("select", L.NewFunction(m.sqlSelect))
+	my.RawSetString("fmtInsert", L.NewFunction(m.fmtInsert))
+	my.RawSetString("fmtSelect", L.NewFunction(m.fmtSelect))
+	my.RawSetString("fmtUpdate", L.NewFunction(m.fmtUpate))
+	my.RawSetString("fmtSql", L.NewFunction(m.fmtSQL))
+	//添加sql事务状态
+	ctx := L.Context()
+	//注册数据库连接状态
+	if addFunc, ok := ctx.Value("addTran").(func(*sqlState)); ok {
+		addFunc(m)
+	}
+	//初始化日志接口
+	if logger, ok := ctx.Value(loggerInterface).(Logger); ok {
+		m.SetLogger(logger)
+	}
+	L.Push(my)
+	return 1
+}
+
+//Loader ...
+func (l *luaSqlite) Loader(L *lua.LState) int {
+	var exports = map[string]lua.LGFunction{
+		"connect": l.connect,
+	}
+	mod := L.SetFuncs(L.NewTable(), exports)
+	L.Push(mod)
+	return 1
+}
+
+func (l *luaSqlite) connect(L *lua.LState) int {
+	name := L.CheckString(1)
+	//先查找name,如果没有查找sqltype-name
+	db := l.db[name]
+	if db == nil {
+		db = l.db["sqlite-"+name]
+		if db == nil {
+			pushTwoErr(fmt.Errorf("数据库[%s]不存在", name), L)
+			return 2
+		}
+	}
+	cache := l.cache[name]
+	if cache == nil {
+		cache = l.cache["sqlite-"+name]
+		if cache == nil {
+			pushTwoErr(fmt.Errorf("缓存[%s]不存在", name), L)
+			return 2
+		}
+	}
+	m := newSQLState(db, "sqlite", cache)
 	my := L.NewTable()
 	my.RawSetString("query", L.NewFunction(m.query))
 	my.RawSetString("queryRow", L.NewFunction(m.queryrow))
@@ -357,8 +443,9 @@ func (my *sqlState) query(L *lua.LState) int {
 		}
 		table := L.NewTable()
 		for i := range values {
+			fmt.Printf("query: %v[%v]\n", i, cols[i].DatabaseTypeName())
 			switch cols[i].DatabaseTypeName() {
-			case "INT", "BIGINT", "FLOAT", "DOUBLE":
+			case "INT", "INTEGER", "BIGINT", "FLOAT", "DOUBLE", "REAL":
 				val, err := strconv.ParseFloat(string(values[i]), 64)
 				if err != nil {
 					pushTwoErr(err, L)
@@ -420,8 +507,9 @@ func (my *sqlState) queryrow(L *lua.LState) int {
 		return 2
 	}
 	for i := range values {
+		fmt.Printf("queryrow: %v[%v]\n", i, cols[i].DatabaseTypeName())
 		switch cols[i].DatabaseTypeName() {
-		case "INT", "BIGINT", "FLOAT", "DOUBLE":
+		case "INT", "INTEGER", "BIGINT", "FLOAT", "DOUBLE", "REAL":
 			val, err := strconv.ParseFloat(string(values[i]), 64)
 			if err != nil {
 				pushTwoErr(err, L)

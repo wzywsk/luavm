@@ -57,7 +57,7 @@ func (l *LuaVM) SetContext(ctx context.Context) {
 }
 
 //LoadLibs 加载常用的库
-func (l *LuaVM) LoadLibs(my, ms, rl, gl lua.LGFunction) {
+func (l *LuaVM) LoadLibs(my, ms, sl, rl, gl lua.LGFunction) {
 	//加载基本库
 	l.OpenLibs()
 	//加载bigint库
@@ -69,6 +69,7 @@ func (l *LuaVM) LoadLibs(my, ms, rl, gl lua.LGFunction) {
 	//加载sql插件
 	l.PreLoadModule("mysql", my)
 	l.PreLoadModule("mssql", ms)
+	l.PreLoadModule("sqlite", sl)
 	//加载redis插件
 	l.PreLoadModule("redis", rl)
 	//加载mongodb插件
@@ -365,6 +366,8 @@ type LuaPool struct {
 	my *luaMySQL
 	//mssql插件
 	ms *luaMsSQL
+	//sqlite插件
+	sl *luaSqlite
 	//redis插件
 	redis *luaRedis
 	//mongodb插件
@@ -421,13 +424,18 @@ func (pl *LuaPool) InitFromConf(conf string) (err error) {
 //InitDB 初始化数据库
 func (pl *LuaPool) initDB() (err error) {
 	//初始化mysql插件
-	pl.my = newluaMySQL()
+	pl.my = newLuaMySQL()
 	if err = pl.my.Init(pl.conf.SQLS); err != nil {
 		return
 	}
-	//舒适化mssql插件
-	pl.ms = newluaMsSQL()
+	//初适化mssql插件
+	pl.ms = newLuaMsSQL()
 	if err = pl.ms.Init(pl.conf.SQLS); err != nil {
+		return
+	}
+	//初适化sqlite插件
+	pl.sl = newLuaSqlite()
+	if err = pl.sl.Init(pl.conf.SQLS); err != nil {
 		return
 	}
 	//初始化redis插件
@@ -464,7 +472,8 @@ type tranfunc string
 //这里将加载lua库和初始化easy全局变量
 func (pl *LuaPool) new() *LuaVM {
 	L := NewLuaVM(pl.conf)
-	L.LoadLibs(pl.my.Loader, pl.ms.Loader, pl.redis.Loader, pl.mgo.Loader)
+	L.LoadLibs(pl.my.Loader, pl.ms.Loader, pl.sl.Loader,
+		pl.redis.Loader, pl.mgo.Loader)
 	L.easy = L.NewLuaTable()
 	//初始化context
 	ctx := mapCtx.WithValue(context.Background(), tranfunc("addTran"), L.addTran)

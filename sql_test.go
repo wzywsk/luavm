@@ -25,7 +25,7 @@ func TestMysql(t *testing.T) {
 			Params:   "multiStatements=true",
 		},
 	}
-	my := newluaMySQL()
+	my := newLuaMySQL()
 	if err := my.Init(conf); err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +94,7 @@ func TestMssql(t *testing.T) {
 			DataBase: "test",
 		},
 	}
-	my := newluaMsSQL()
+	my := newLuaMsSQL()
 	if err := my.Init(conf); err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +162,7 @@ func BenchmarkMssql(b *testing.B) {
 				DataBase: "test",
 			},
 		}
-		my := newluaMsSQL()
+		my := newLuaMsSQL()
 		if err := my.Init(conf); err != nil {
 			b.Fatal(err)
 		}
@@ -213,7 +213,7 @@ func BenchmarkMysql(b *testing.B) {
 				DataBase: "test",
 			},
 		}
-		my := newluaMySQL()
+		my := newLuaMySQL()
 		if err := my.Init(conf); err != nil {
 			b.Fatal(err)
 		}

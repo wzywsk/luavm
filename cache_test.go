@@ -22,7 +22,7 @@ func TestMysqlCache(t *testing.T) {
 			DataBase: "test",
 		},
 	}
-	my := newluaMySQL()
+	my := newLuaMySQL()
 	if err := my.Init(conf); err != nil {
 		t.Fatal(err)
 	}

@@ -16,6 +16,8 @@ const (
 	MYSQL = "mysql"
 	//MSSQL ...
 	MSSQL = "mssql"
+	//SQLITE ...
+	SQLITE = "sqlite"
 )
 
 func toString(b []byte) (s string) {
@@ -28,6 +30,8 @@ func quote(sqlType, name string) string {
 		return "`" + name + "`"
 	case MSSQL:
 		return "[" + name + "]"
+	case SQLITE:
+		return "`" + name + "`"
 	}
 	return ""
 }
@@ -38,6 +42,8 @@ func quoteByte(sqlType string) byte {
 		return '\\'
 	case MSSQL:
 		return '\''
+	case SQLITE:
+		return '\\'
 	}
 	return ' '
 }
@@ -63,12 +69,16 @@ func isText(sqlType, s string) (bool, string) {
 		if start == '\'' || end == '\'' {
 			return true, ""
 		}
-		if sqlType == MSSQL {
+		switch sqlType {
+		case MSSQL:
 			if start == '[' || end == ']' {
 				return false, ""
 			}
-		}
-		if sqlType == MYSQL {
+		case MYSQL:
+			if start == '`' || end == '`' {
+				return false, ""
+			}
+		case SQLITE:
 			if start == '`' || end == '`' {
 				return false, ""
 			}
@@ -210,12 +220,15 @@ func genInsertField(sqlType string, buff *strings.Builder, index int, key lua.LV
 func genInsertValue(sqlType string, buff *strings.Builder, value lua.LValue) {
 	switch value.Type() {
 	case lua.LTBool:
-		if sqlType == MSSQL {
+		switch sqlType {
+		case MSSQL:
 			buff.WriteString(fmt.Sprintf(" %d ", toBool(value.(lua.LBool))))
 			return
-		} else if sqlType == MYSQL {
+		case MYSQL:
 			buff.WriteString(fmt.Sprintf(" %t ", value.(lua.LBool)))
 			return
+		case SQLITE:
+			buff.WriteString(fmt.Sprintf(" %t ", value.(lua.LBool)))
 		}
 	case lua.LTNumber:
 		buff.WriteString(fmt.Sprintf(" %v ", value.(lua.LNumber)))
@@ -319,10 +332,14 @@ func genSelectField(sqlType string, buff *strings.Builder, key, value lua.LValue
 	keyStr := quote(sqlType, key.String())
 	switch value.Type() {
 	case lua.LTBool:
-		if sqlType == MSSQL {
+		switch sqlType {
+		case MSSQL:
 			buff.WriteString(fmt.Sprintf(" %d %s", toBool(value.(lua.LBool)), keyStr))
 			return
-		} else if sqlType == MYSQL {
+		case MYSQL:
+			buff.WriteString(fmt.Sprintf(" %t %s", value.(lua.LBool), keyStr))
+			return
+		case SQLITE:
 			buff.WriteString(fmt.Sprintf(" %t %s", value.(lua.LBool), keyStr))
 			return
 		}
@@ -476,10 +493,14 @@ func genUpdate(sqlType string, buff *strings.Builder, key, value lua.LValue) {
 	keyStr := quote(sqlType, key.String())
 	switch value.Type() {
 	case lua.LTBool:
-		if sqlType == MSSQL {
+		switch sqlType {
+		case MSSQL:
 			buff.WriteString(fmt.Sprintf(" %s = %d ", keyStr, toBool(value.(lua.LBool))))
 			return
-		} else if sqlType == MYSQL {
+		case MYSQL:
+			buff.WriteString(fmt.Sprintf(" %s = %t ", keyStr, value.(lua.LBool)))
+			return
+		case SQLITE:
 			buff.WriteString(fmt.Sprintf(" %s = %t ", keyStr, value.(lua.LBool)))
 			return
 		}
