@@ -6,19 +6,19 @@ import (
 	"log"
 	"sync"
 
-	"game/luavm/internal/gopher-json"
+	json "luavm/internal/gopher-json"
 
 	mapCtx "github.com/yireyun/go_context"
 	"github.com/yuin/gluamapper"
-	"github.com/yuin/gopher-lua"
-	"layeh.com/gopher-luar"
+	lua "github.com/yuin/gopher-lua"
+	luar "layeh.com/gopher-luar"
 )
 
 const (
 	loggerInterface = "logger-interface"
 )
 
-//LuaVM lua虚拟机,每一个lua脚本维护一个lua状态
+// LuaVM lua虚拟机,每一个lua脚本维护一个lua状态
 type LuaVM struct {
 	lock     sync.Mutex
 	l        *lua.LState
@@ -28,7 +28,7 @@ type LuaVM struct {
 	trans    []*sqlState //mysql事务状态
 }
 
-//NewLuaVM ...
+// NewLuaVM ...
 func NewLuaVM(conf *luaConfig) *LuaVM {
 	l := new(LuaVM)
 	l.conf = conf
@@ -38,7 +38,7 @@ func NewLuaVM(conf *luaConfig) *LuaVM {
 	return l
 }
 
-//Close 关闭虚拟机
+// Close 关闭虚拟机
 func (l *LuaVM) Close() {
 	if l.l == nil {
 		return
@@ -46,17 +46,17 @@ func (l *LuaVM) Close() {
 	l.l.Close()
 }
 
-//GetContext 设置上下文,一般用来设置超时时间
+// GetContext 设置上下文,一般用来设置超时时间
 func (l *LuaVM) GetContext() context.Context {
 	return l.l.Context()
 }
 
-//SetContext 设置上下文,一般用来设置超时时间
+// SetContext 设置上下文,一般用来设置超时时间
 func (l *LuaVM) SetContext(ctx context.Context) {
 	l.l.SetContext(ctx)
 }
 
-//LoadLibs 加载常用的库
+// LoadLibs 加载常用的库
 func (l *LuaVM) LoadLibs(my, ms, sl, rl, gl lua.LGFunction) {
 	//加载基本库
 	l.OpenLibs()
@@ -76,12 +76,12 @@ func (l *LuaVM) LoadLibs(my, ms, sl, rl, gl lua.LGFunction) {
 	l.PreLoadModule("mongodb", gl)
 }
 
-//PreLoadModule 加载自定义库
+// PreLoadModule 加载自定义库
 func (l *LuaVM) PreLoadModule(name string, loader lua.LGFunction) {
 	l.l.PreloadModule(name, loader)
 }
 
-//DoString 执行一个lua字符串
+// DoString 执行一个lua字符串
 func (l *LuaVM) DoString(str string) (errNo, errMsg string, err error) {
 	//初始化easy全局变量
 	l.initEasy()
@@ -125,13 +125,13 @@ func (l *LuaVM) DoString(str string) (errNo, errMsg string, err error) {
 	return
 }
 
-//GetEasyAttr 往easy全局对象中读取属性
+// GetEasyAttr 往easy全局对象中读取属性
 func (l *LuaVM) GetEasyAttr(name string) lua.LValue {
 	return l.easy.RawGetString(name)
 }
 
-//DoFile 根据busitype和trancode加载一个lua文件并运行,
-//这里将设置luarequire目录, 只允许lua中加载同一业务下的代码
+// DoFile 根据busitype和trancode加载一个lua文件并运行,
+// 这里将设置luarequire目录, 只允许lua中加载同一业务下的代码
 func (l *LuaVM) DoFile(busi, trancode string) (err error) {
 	l.initEasy()
 	l.lock.Lock()
@@ -163,31 +163,32 @@ func (l *LuaVM) DoFile(busi, trancode string) (err error) {
 	return nil
 }
 
-//添加mysql事务状态
+// 添加mysql事务状态
 func (l *LuaVM) addTran(tran *sqlState) {
 	l.trans = append(l.trans, tran)
 }
 
-//GetEnv ...
+// GetEnv ...
 func (l *LuaVM) GetEnv() *lua.LTable {
 	return l.l.Env
 }
 
-//SetGlobal 为lua设置一个全局类型
-//如果传入函数格式必须为 func(L *lua.LState) int
-//传入参数和返回都使用栈,返回int代表有几个返回参数
-//func Test(L *lua.LState) int {
-//	s0 := L.ToInt(0)
-//	s1 := L.ToInt(1)
-//	s2 := L.ToInt(2)
-//	s3 := L.Get(6)
-//	if s3 == lua.LNil {
-//		fmt.Println("hehe")
+// SetGlobal 为lua设置一个全局类型
+// 如果传入函数格式必须为 func(L *lua.LState) int
+// 传入参数和返回都使用栈,返回int代表有几个返回参数
+//
+//	func Test(L *lua.LState) int {
+//		s0 := L.ToInt(0)
+//		s1 := L.ToInt(1)
+//		s2 := L.ToInt(2)
+//		s3 := L.Get(6)
+//		if s3 == lua.LNil {
+//			fmt.Println("hehe")
+//		}
+//		L.Push(lua.LNumber(s1))
+//		L.Push(lua.LNumber(s2))
+//		return 2
 //	}
-//	L.Push(lua.LNumber(s1))
-//	L.Push(lua.LNumber(s2))
-//	return 2
-//}
 func (l *LuaVM) SetGlobal(name string, value lua.LValue) {
 	l.lock.Lock()
 	defer l.lock.Unlock()
@@ -204,8 +205,8 @@ func (l *LuaVM) SetGlobal(name string, value lua.LValue) {
 	//l.l.SetGlobal(name, luar.New(l.l, value))
 }
 
-//AddField 为一个对象添加字段
-//dst 必须为userdata或者table
+// AddField 为一个对象添加字段
+// dst 必须为userdata或者table
 func (l *LuaVM) AddField(dst lua.LValue, key string, field interface{}) {
 	if dst.Type() != lua.LTTable && dst.Type() != lua.LTUserData {
 		return
@@ -213,12 +214,12 @@ func (l *LuaVM) AddField(dst lua.LValue, key string, field interface{}) {
 	l.l.SetField(dst, key, luar.New(l.l, field))
 }
 
-//NewFunction ...
+// NewFunction ...
 func (l *LuaVM) NewFunction(fn lua.LGFunction) *lua.LFunction {
 	return l.l.NewFunction(fn)
 }
 
-//GetGlobal 获取全局类型
+// GetGlobal 获取全局类型
 func (l *LuaVM) GetGlobal(name string) (value lua.LValue) {
 	l.lock.Lock()
 	defer l.lock.Unlock()
@@ -226,23 +227,23 @@ func (l *LuaVM) GetGlobal(name string) (value lua.LValue) {
 	return l.l.GetGlobal(name)
 }
 
-//NewLuaTable 创建一个lua的table
+// NewLuaTable 创建一个lua的table
 func (l *LuaVM) NewLuaTable() (r *lua.LTable) {
 	return l.l.NewTable()
 }
 
-//NewUserData 创建一个用户数据
+// NewUserData 创建一个用户数据
 func (l *LuaVM) NewUserData() *lua.LUserData {
 	return l.l.NewUserData()
 }
 
-//ConvLuaType 将一个Go类型转换为Lua类型
+// ConvLuaType 将一个Go类型转换为Lua类型
 func (l *LuaVM) ConvLuaType(src interface{}) (dst lua.LValue) {
 	dst = luar.New(l.l, src)
 	return
 }
 
-//ConvGoType 将一个lua转换为Go类型,仅支持go结构体
+// ConvGoType 将一个lua转换为Go类型,仅支持go结构体
 func (l *LuaVM) ConvGoType(src lua.LValue, dst interface{}) (err error) {
 	if _, ok := src.(*lua.LTable); !ok {
 		err = fmt.Errorf("%s lua类型必须为 table", src.Type().String())
@@ -251,7 +252,7 @@ func (l *LuaVM) ConvGoType(src lua.LValue, dst interface{}) (err error) {
 	return gluamapper.Map(src.(*lua.LTable), dst)
 }
 
-//CallGlobal 调用一个全局函数
+// CallGlobal 调用一个全局函数
 func (l *LuaVM) CallGlobal(name string, args ...interface{}) (r lua.LValue, err error) {
 	l.lock.Lock()
 	defer l.lock.Unlock()
@@ -282,7 +283,7 @@ func (l *LuaVM) CallGlobal(name string, args ...interface{}) (r lua.LValue, err 
 	return
 }
 
-//CallLuaFunc 调用一个Lua函数
+// CallLuaFunc 调用一个Lua函数
 func (l *LuaVM) CallLuaFunc(fn lua.LValue, args ...interface{}) (r lua.LValue, err error) {
 	l.lock.Lock()
 	defer l.lock.Unlock()
@@ -308,17 +309,17 @@ func (l *LuaVM) CallLuaFunc(fn lua.LValue, args ...interface{}) (r lua.LValue, e
 	return
 }
 
-//GetField 从value中获取字段name
+// GetField 从value中获取字段name
 func (l *LuaVM) GetField(value lua.LValue, key string) (r lua.LValue) {
 	return l.l.GetField(value, key)
 }
 
-//Reset ...
+// Reset ...
 func (l *LuaVM) Reset() {
 	l.l.SetTop(0)
 }
 
-//Clean 清理虚拟机状态
+// Clean 清理虚拟机状态
 func (l *LuaVM) Clean() {
 	//清除堆栈和全局变量
 	l.l.SetTop(0)
@@ -328,7 +329,7 @@ func (l *LuaVM) Clean() {
 	l.easyInit = false
 }
 
-//Logger 日志接口,从context中取出
+// Logger 日志接口,从context中取出
 type Logger interface {
 
 	//记录错误日志
@@ -347,17 +348,17 @@ type Logger interface {
 	Trace(format string, a ...interface{})
 }
 
-//加入easy全局对象
+// 加入easy全局对象
 func (l *LuaVM) initEasy() {
 	l.SetGlobal("easy", l.easy)
 }
 
-//SetEasyAttr 往easy全局对象中添加属性
+// SetEasyAttr 往easy全局对象中添加属性
 func (l *LuaVM) SetEasyAttr(name string, value lua.LValue) {
 	l.easy.RawSetString(name, value)
 }
 
-//LuaPool lua虚拟机池
+// LuaPool lua虚拟机池
 type LuaPool struct {
 	m     sync.Mutex
 	saved []*LuaVM
@@ -397,7 +398,7 @@ func NewLuaPool() *LuaPool {
 	return p
 }
 
-//InitFromFile 初始化lua容器,必须调用.
+// InitFromFile 初始化lua容器,必须调用.
 func (pl *LuaPool) InitFromFile(file string) (err error) {
 	//读取配置文件
 	if err = pl.conf.LoadFromFile(file); err != nil {
@@ -409,7 +410,7 @@ func (pl *LuaPool) InitFromFile(file string) (err error) {
 	return nil
 }
 
-//InitFromConf 初始化lua容器,必须调用.
+// InitFromConf 初始化lua容器,必须调用.
 func (pl *LuaPool) InitFromConf(conf string) (err error) {
 	//读取配置文件
 	if err = pl.conf.LoadFromConf(conf); err != nil {
@@ -421,7 +422,7 @@ func (pl *LuaPool) InitFromConf(conf string) (err error) {
 	return nil
 }
 
-//InitDB 初始化数据库
+// InitDB 初始化数据库
 func (pl *LuaPool) initDB() (err error) {
 	//初始化mysql插件
 	pl.my = newLuaMySQL()
@@ -453,7 +454,7 @@ func (pl *LuaPool) initDB() (err error) {
 	return nil
 }
 
-//Get 如果没有则会新建
+// Get 如果没有则会新建
 func (pl *LuaPool) Get() *LuaVM {
 	pl.m.Lock()
 	defer pl.m.Unlock()
@@ -469,7 +470,7 @@ func (pl *LuaPool) Get() *LuaVM {
 
 type tranfunc string
 
-//这里将加载lua库和初始化easy全局变量
+// 这里将加载lua库和初始化easy全局变量
 func (pl *LuaPool) new() *LuaVM {
 	L := NewLuaVM(pl.conf)
 	L.LoadLibs(pl.my.Loader, pl.ms.Loader, pl.sl.Loader,
@@ -481,7 +482,7 @@ func (pl *LuaPool) new() *LuaVM {
 	return L
 }
 
-//Put ...
+// Put ...
 func (pl *LuaPool) Put(L *LuaVM) {
 	L.Clean()
 	//放入对象池
@@ -491,7 +492,7 @@ func (pl *LuaPool) Put(L *LuaVM) {
 	pl.saved = append(pl.saved, L)
 }
 
-//Shutdown 关闭池内的所以虚拟机
+// Shutdown 关闭池内的所以虚拟机
 func (pl *LuaPool) Shutdown() {
 	for _, L := range pl.saved {
 		L.Close()

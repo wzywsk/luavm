@@ -2,9 +2,8 @@ package json // import "game/luavm/internal/gopher-json"
 
 import (
 	"fmt"
-	"game/core/udt"
 
-	"github.com/yuin/gopher-lua"
+	lua "github.com/yuin/gopher-lua"
 )
 
 const (
@@ -14,5 +13,5 @@ const (
 
 func toLuaError(errNo, errMsg string) lua.LString {
 	sErr := fmt.Sprintf("<err> #%s %s ", ErrJsonDecodeNo, errMsg)
-	return lua.LString(udt.ToUdString(sErr, udt.SubError, ' '))
+	return lua.LString(sErr)
 }
